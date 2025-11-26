@@ -1,0 +1,31 @@
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-dotenv==1.0.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+
+# CORS
+python-multipart==0.0.6
+
+# Data sources
+yfinance==0.2.32
+alpaca-py==0.13.0
+requests==2.31.0
+
+# LLM Clients (optional - choose based on which AI service you want to use)
+# OpenAI (paid)
+# openai==1.12.0
+
+# Anthropic Claude (FREE tier available - recommended)
+# anthropic==0.18.0
+
+# Google Gemini (FREE tier available - recommended)
+# google-generativeai==0.3.2
+
+# Groq (FREE tier available - recommended, very fast)
+# groq==0.4.1
+
