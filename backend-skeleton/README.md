@@ -8,7 +8,7 @@ AI vs Human Stock Trading Competition Backend API
 stock-arena-backend/
 ├── main.py                    # FastAPI entry point + CORS + route registration
 ├── config.py                  # Configuration (stock pool, trading interval, etc.)
-├── models/                    # ← Copy your schema/ and crud/ here
+├── models/                    # Database models and CRUD operations
 │   ├── __init__.py
 │   ├── database.py            # Database connection
 │   ├── schema/                # SQLAlchemy models
@@ -38,45 +38,47 @@ stock-arena-backend/
 
 ## 🔌 API Endpoints Summary
 
-### Accounts `/api/accounts` -> For frontend account cards.
+### Accounts `/api/v1/accounts` -> For frontend account cards.
 
 | Method | Endpoint | Function |
 |--------|----------|----------|
-| GET | `/api/accounts` | All accounts (Frontend Section 1) |
-| GET | `/api/accounts/{id}/transactions` | Transaction history |
-| GET | `/api/accounts/{id}/positions` | Current positions |
+| GET | `/api/v1/accounts` | All accounts (Frontend Section 1) |
+| GET | `/api/v1/accounts/{id}` | Get account details |
+| GET | `/api/v1/accounts/{id}/transactions` | Transaction history |
+| GET | `/api/v1/accounts/{id}/positions` | Current positions |
 
-### Stocks `/api/stocks`    -> For frontend stock cards.
-
-| Method | Endpoint | Function |
-|--------|----------|----------|
-| GET | `/api/stocks/prices` | Real-time prices for 10 stocks (Frontend Section 2) |
-| GET | `/api/stocks/{ticker}/history` | Historical K-line data |
-
-### Competition `/api/competition`   -> For start/pause/resume competition (Optional)
+### Stocks `/api/v1/stocks`    -> For frontend stock cards.
 
 | Method | Endpoint | Function |
 |--------|----------|----------|
-| POST | `/api/competition/start` | 🚀 Start competition |
-| POST | `/api/competition/pause` | ⏸️ Pause trading |
-| POST | `/api/competition/resume` | ▶️ Resume trading |
-| GET | `/api/competition/status` | Competition status |
+| GET | `/api/v1/stocks/prices` | Real-time prices for 10 stocks (Frontend Section 2) |
+| GET | `/api/v1/stocks/{ticker}/history` | Historical K-line data |
 
-### Trading `/api/trading`         -> For calling LLM automatically trading (optional)
+### Competition `/api/v1/competition`   -> For start/pause/resume competition (Optional)
 
 | Method | Endpoint | Function |
 |--------|----------|----------|
-| POST | `/api/trading/execute` | Human player trade execution |
-| GET | `/api/trading/strategy/{id}` | Get AI strategy |
+| POST | `/api/v1/competition/start` | 🚀 Start competition |
+| POST | `/api/v1/competition/pause` | ⏸️ Pause trading |
+| POST | `/api/v1/competition/resume` | ▶️ Resume trading |
+| GET | `/api/v1/competition/status` | Competition status |
+
+### Trading `/api/v1/trading`         -> For calling LLM automatically trading (optional)
+
+| Method | Endpoint | Function |
+|--------|----------|----------|
+| POST | `/api/v1/trading/execute` | Human player trade execution |
+| GET | `/api/v1/trading/strategy/{account_id}` | Get latest AI strategy for account |
+| GET | `/api/v1/trading/strategies/{account_id}` | Get strategy history for account |
 
 ## 🏗️ System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Frontend (React)                                           │
-│  ├── Account Section ────────► GET /api/accounts             │
-│  ├── Stock Section ──────────► GET /api/stocks/prices        │
-│  └── Competition Control ───► POST /api/competition/*       │
+│  ├── Account Section ────────► GET /api/v1/accounts             │
+│  ├── Stock Section ──────────► GET /api/v1/stocks/prices        │
+│  └── Competition Control ───► POST /api/v1/competition/*       │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -115,7 +117,7 @@ stock-arena-backend/
 
 ## 🚀 Core Workflows
 
-### 1️⃣ Competition Start Workflow (`POST /api/competition/start`)
+### 1️⃣ Competition Start Workflow (`POST /api/v1/competition/start`)
 
 ```
 1️⃣ Reset Accounts
@@ -174,9 +176,10 @@ CompetitionManageService.execute_ai_trades()
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Configure environment variables
-cp .env.example .env
-# Edit .env and add OPENAI_API_KEY
+# 2. Configure environment variables (optional)
+# Create .env file and add:
+#   DATABASE_URL=sqlite:///./stock_arena.db  # or PostgreSQL connection string
+#   OPENAI_API_KEY=your_api_key_here
 
 # 3. Run the service
 python main.py
@@ -184,32 +187,36 @@ python main.py
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+**Database Setup:**
+- **SQLite** (default): No setup needed - database file is created automatically
+- **PostgreSQL**: Create database first, then update `DATABASE_URL` in `.env` or `config.py`
+
 ## 💻 Frontend Integration Examples
 
 ```javascript
 // 1. Get real-time stock prices (Frontend Section 2)
-fetch('/api/stocks/prices')
+fetch('/api/v1/stocks/prices')
   .then(res => res.json())
   .then(data => console.log(data.stocks));
 
 // 2. Get account information (Frontend Section 1)
-fetch('/api/accounts')
+fetch('/api/v1/accounts')
   .then(res => res.json())
   .then(accounts => console.log(accounts));
 
 // 3. Start competition
-fetch('/api/competition/start', { method: 'POST' })
+fetch('/api/v1/competition/start', { method: 'POST' })
   .then(res => res.json())
   .then(result => console.log(result));
 
 // 4. Pause trading
-fetch('/api/competition/pause', { method: 'POST' });
+fetch('/api/v1/competition/pause', { method: 'POST' });
 
 // 5. Resume trading
-fetch('/api/competition/resume', { method: 'POST' });
+fetch('/api/v1/competition/resume', { method: 'POST' });
 
 // 6. Human player trade
-fetch('/api/trading/execute', {
+fetch('/api/v1/trading/execute', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -231,6 +238,8 @@ fetch('/api/v1/trading/strategy/1', {
 
 ## ⚙️ Configuration
 
+### Application Settings
+
 In `config.py` you can configure:
 
 - `DEFAULT_BALANCE`: Initial balance (default $1,000,000)
@@ -240,10 +249,13 @@ In `config.py` you can configure:
 
 ## 📝 Notes
 
-1. **Schema/CRUD Files**: You need to copy your `models/schema/` and `models/crud/` files to the corresponding directories
-2. **AI API**: OpenAI API Key must be configured to generate strategies
+1. **Schema/CRUD Files**: All model files are already in `models/schema/` and CRUD operations in `models/crud/`
+2. **AI API**: OpenAI API Key must be configured in `.env` or `config.py` to generate strategies
 3. **Scheduled Tasks**: Auto-trading runs every 10 minutes by default, can be adjusted in `config.py`
-4. **Database**: Uses SQLite by default, PostgreSQL recommended for production
+4. **Database**: 
+   - **SQLite** (default): Automatically creates database file, no setup required
+   - **PostgreSQL**: Requires manual database creation, but tables are created automatically
+   - **No code changes needed** to switch between databases - just update `DATABASE_URL` in config
 
 ## 🔧 Development Guide
 
