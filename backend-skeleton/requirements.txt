@@ -1,31 +1,20 @@
-# Web framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-python-dotenv==1.0.0
+# Stock Trading Arena - Dependencies
+
+# FastAPI
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
 
 # Database
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
 
-# CORS
-python-multipart==0.0.6
+# HTTP client (for AI API)
+httpx==0.26.0
 
-# Data sources
-yfinance==0.2.32
-alpaca-py==0.13.0
-requests==2.31.0
+# Stock data
+yfinance==0.2.36
+pandas==2.1.4
 
-# LLM Clients (optional - choose based on which AI service you want to use)
-# OpenAI (paid)
-# openai==1.12.0
-
-# Anthropic Claude (FREE tier available - recommended)
-# anthropic==0.18.0
-
-# Google Gemini (FREE tier available - recommended)
-# google-generativeai==0.3.2
-
-# Groq (FREE tier available - recommended, very fast)
-# groq==0.4.1
-
+# Utilities
+python-dotenv==1.0.0
