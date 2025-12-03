@@ -252,10 +252,8 @@ In `config.py` you can configure:
 1. **Schema/CRUD Files**: All model files are already in `models/schema/` and CRUD operations in `models/crud/`
 2. **AI API**: OpenAI API Key must be configured in `.env` or `config.py` to generate strategies
 3. **Scheduled Tasks**: Auto-trading runs every 10 minutes by default, can be adjusted in `config.py`
-4. **Database**: 
-   - **SQLite** (default): Automatically creates database file, no setup required
-   - **PostgreSQL**: Requires manual database creation, but tables are created automatically
-   - **No code changes needed** to switch between databases - just update `DATABASE_URL` in config
+4. **Database**: **PostgreSQL**: Requires manual database creation, but tables are created automatically
+  
 
 ## 🔧 Development Guide
 
