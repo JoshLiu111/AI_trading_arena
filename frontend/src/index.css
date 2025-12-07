@@ -1,21 +1,21 @@
 /* src/index.css */
 
-/* 主色调 */
+
 :root {
-  --bg-primary: #0A0E27;        /* 深蓝黑背景 */
-  --bg-secondary: #141B3B;       /* 卡片背景 */
-  --accent-blue: #3B82F6;        /* 主要蓝色 */
-  --accent-purple: #8B5CF6;     /* 次要紫色 */
-  --accent-cyan: #06B6D4;        /* 点缀青色 */
+  --bg-primary: #0A0E27;        
+  --bg-secondary: #141B3B;       
+  --accent-blue: #3B82F6;       
+  --accent-purple: #8B5CF6;     
+  --accent-cyan: #06B6D4;        
   
-  /* 文字 */
-  --text-primary: #F9FAFB;       /* 主文字 */
-  --text-secondary: #9CA3AF;    /* 次要文字 */
+
+  --text-primary: #F9FAFB;       
+  --text-secondary: #9CA3AF;   
   
-  /* 数据颜色 */
-  --green: #10B981;              /* 涨 */
-  --red: #EF4444;                /* 跌 */
-  --orange: #F59E0B;             /* 强调 */
+  
+  --green: #10B981;              
+  --red: #EF4444;               
+  --orange: #F59E0B;            
 }
 
 * {
