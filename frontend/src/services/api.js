@@ -21,8 +21,7 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 const API_VERSION = "/api/v1";
 
-// 使用模拟数据模式（默认 false，连接真实后端）
-// 设置为 true 或设置环境变量 VITE_USE_MOCK_DATA=true 来使用模拟数据
+
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
 
 async function fetchAPI(endpoint, options = {}) {
