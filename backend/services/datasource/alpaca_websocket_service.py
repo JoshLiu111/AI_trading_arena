@@ -162,8 +162,11 @@ class AlpacaWebSocketService:
                         logger.warning("Will use REST API for real-time prices (WebSocket disabled)")
                         self.connection_limit_reached = True
                         self.running = False
-                        # Stop the stream to prevent library from retrying
-                        asyncio.run_coroutine_threadsafe(self.stop(), asyncio.get_event_loop())
+                        # Destroy stream to prevent library from retrying
+                        try:
+                            self.stream = None
+                        except:
+                            pass
                         return  # Stop immediately, don't retry
                     else:
                         logger.error(f"Alpaca WebSocket error: {e}")
@@ -177,8 +180,11 @@ class AlpacaWebSocketService:
                         logger.warning("Will use REST API for real-time prices (WebSocket disabled)")
                         self.connection_limit_reached = True
                         self.running = False
-                        # Stop the stream to prevent library from retrying
-                        asyncio.run_coroutine_threadsafe(self.stop(), asyncio.get_event_loop())
+                        # Destroy stream to prevent library from retrying
+                        try:
+                            self.stream = None
+                        except:
+                            pass
                         return
                     logger.exception(f"Error in Alpaca stream thread: {e}")
                     logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
@@ -190,12 +196,19 @@ class AlpacaWebSocketService:
             logger.info("Alpaca WebSocket stream thread started")
             
             # Keep the async task alive while stream is running
-            while self.running:
+            # Exit immediately if connection limit was reached
+            while self.running and not self.connection_limit_reached:
                 await asyncio.sleep(1)
+            
+            # If connection limit was reached, stop the service
+            if self.connection_limit_reached:
+                logger.info("Connection limit reached, stopping WebSocket service")
+                await self.stop()
         except Exception as e:
             logger.exception(f"Error running Alpaca stream: {e}")
             logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
             self.running = False
+            self.connection_limit_reached = True  # Prevent future attempts
     
     async def stop(self):
         """Stop WebSocket connection"""
