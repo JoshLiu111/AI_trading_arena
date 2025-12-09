@@ -7,14 +7,21 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 const API_VERSION = "/api/v1";
 
+// Normalize API base URL (remove trailing slash)
+const normalizeBaseUrl = (url) => {
+  if (!url) return "";
+  return url.replace(/\/+$/, ""); // Remove trailing slashes
+};
+
 export async function fetchAPI(endpoint, options = {}) {
-  const url = `${API_BASE_URL}${API_VERSION}${endpoint}`;
+  // Normalize base URL and ensure endpoint starts with /
+  const baseUrl = normalizeBaseUrl(API_BASE_URL);
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = `${baseUrl}${API_VERSION}${normalizedEndpoint}`;
   
-  // Debug: Log API URL in development
-  if (import.meta.env.DEV) {
-    console.log("API Request URL:", url);
-    console.log("API Base URL:", API_BASE_URL);
-  }
+  // Debug: Log API URL
+  console.log("API Request URL:", url);
+  console.log("API Base URL:", API_BASE_URL);
   const defaultOptions = {
     headers: {
       "Content-Type": "application/json",
