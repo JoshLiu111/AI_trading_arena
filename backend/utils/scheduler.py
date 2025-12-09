@@ -226,12 +226,19 @@ async def lifespan(app):
     # Historical data is updated twice daily (08:00 UTC, 20:00 UTC)
     logger.info("Using REST API with caching (WebSocket disabled for stability)")
     
-    # Trigger initial real-time data update (non-blocking)
+    # Trigger initial real-time data update (non-blocking, runs in background thread)
     try:
         from services.datasource.alpaca_realtime_updater import alpaca_realtime_updater
-        # Run initial update in background
-        asyncio.create_task(asyncio.to_thread(alpaca_realtime_updater.update_all_prices))
-        logger.info("Initial real-time price update triggered")
+        import threading
+        def run_initial_update():
+            try:
+                alpaca_realtime_updater.update_all_prices()
+            except Exception as e:
+                logger.warning(f"Error in initial real-time price update: {e}")
+        
+        update_thread = threading.Thread(target=run_initial_update, daemon=True)
+        update_thread.start()
+        logger.info("Initial real-time price update triggered (background thread)")
     except Exception as e:
         logger.warning(f"Failed to trigger initial real-time price update: {e}")
     
