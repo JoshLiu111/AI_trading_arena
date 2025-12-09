@@ -118,14 +118,38 @@ class PolygonWebSocketService:
         await self.websocket.send(json.dumps(subscribe_msg))
         self.subscribed_tickers.update(tickers)
         logger.info(f"Subscribed to {len(tickers)} tickers via WebSocket: {tickers}")
+        logger.info(f"Subscription message: {json.dumps(subscribe_msg)}")
+        
+        # Wait for subscription confirmation (optional, but helpful for debugging)
+        try:
+            # Give it a moment to receive subscription confirmation
+            await asyncio.sleep(0.5)
+            # Try to peek at next message if available (non-blocking)
+            # This is just for logging, actual listening happens in _listen()
+        except Exception as e:
+            logger.debug(f"Error checking subscription confirmation: {e}")
     
     async def _listen(self):
         """Listen for WebSocket messages with auto-reconnect"""
+        message_count = 0
         while self.running:
             try:
                 async for message in self.websocket:
                     try:
                         data = json.loads(message)
+                        message_count += 1
+                        
+                        # Log first few messages and all trade events for debugging
+                        if message_count <= 10:
+                            logger.info(f"WebSocket message #{message_count}: {json.dumps(data)[:300]}")
+                        
+                        # Also log all trade events
+                        if isinstance(data, list):
+                            for event in data:
+                                if event.get("ev") == "T":
+                                    logger.info(f"Trade event received: {event.get('sym')} @ ${event.get('p')}")
+                        elif isinstance(data, dict) and data.get("ev") == "T":
+                            logger.info(f"Trade event received: {data.get('sym')} @ ${data.get('p')}")
                         
                         # Handle array of events
                         if isinstance(data, list):
@@ -160,6 +184,7 @@ class PolygonWebSocketService:
         
         if self.reconnect_attempts >= self.max_reconnect_attempts:
             logger.error(f"Max reconnect attempts ({self.max_reconnect_attempts}) reached. Stopping WebSocket service.")
+            logger.warning("WebSocket service disabled. Falling back to REST API for real-time prices.")
             self.running = False
             return
         
@@ -176,7 +201,8 @@ class PolygonWebSocketService:
             # Close old connection if exists
             if self.websocket:
                 try:
-                    await self.websocket.close()
+                    if not self.websocket.closed:
+                        await self.websocket.close()
                 except Exception:
                     pass  # Ignore errors when closing old connection
                 self.websocket = None
@@ -202,18 +228,22 @@ class PolygonWebSocketService:
         
         if event_type == "T":  # Trade event
             ticker = event.get("sym", "")
-            if ticker:
+            price = event.get("p")
+            if ticker and price:
                 # Update price cache
                 self.price_cache[ticker] = {
                     "date": date.today(),
                     "open": None,
                     "high": None,
                     "low": None,
-                    "close": float(event.get("p", 0)) if event.get("p") else None,
+                    "close": float(price),
                     "volume": int(event.get("s", 0)) if event.get("s") else None,
-                    "adj_close": float(event.get("p", 0)) if event.get("p") else None,
+                    "adj_close": float(price),
                     "updated_at": datetime.now()
                 }
+                logger.info(f"WebSocket: Updated {ticker} price to ${price:.2f}")
+            elif ticker:
+                logger.debug(f"WebSocket: Received trade event for {ticker} but no price data")
         elif event_type == "status":
             status = event.get("status", "")
             message = event.get("message", "")
@@ -222,9 +252,11 @@ class PolygonWebSocketService:
             elif status == "auth_failed":
                 logger.error(f"WebSocket authentication failed: {message}")
             elif status == "success":
-                logger.debug(f"WebSocket operation successful: {message}")
+                logger.info(f"WebSocket operation successful: {message}")
+            elif status == "subscribed":
+                logger.info(f"WebSocket subscription confirmed: {message}")
             else:
-                logger.debug(f"WebSocket status: {status} - {message}")
+                logger.info(f"WebSocket status: {status} - {message}")
     
     async def start(self, tickers: list):
         """Start WebSocket connection and subscribe to tickers"""

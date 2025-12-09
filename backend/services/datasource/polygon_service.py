@@ -214,28 +214,25 @@ class PolygonService(BaseDataSource):
                     last_trade = ticker_data.get("lastTrade") or {}
                     prev_day = ticker_data.get("prevDay") or {}
                     
-                    # Use last trade price as close, or prevDay close if not available
+                    # Prioritize last trade price (real-time) over prevDay close
                     close_price = None
                     if last_trade and isinstance(last_trade, dict) and last_trade.get("p"):
                         try:
                             close_price = float(last_trade["p"])
-                            logger.info(f"Ticker {ticker}: Using lastTrade price = {close_price}")
+                            logger.info(f"Ticker {ticker}: Using lastTrade price (real-time) = {close_price}")
                         except (ValueError, TypeError):
                             logger.warning(f"Invalid lastTrade price for {ticker}: {last_trade.get('p')}")
-                    elif prev_day and isinstance(prev_day, dict) and prev_day.get("c"):
+                    
+                    # Fallback to prevDay close if no real-time price available
+                    if close_price is None and prev_day and isinstance(prev_day, dict) and prev_day.get("c"):
                         try:
                             close_price = float(prev_day["c"])
-                            logger.info(f"Ticker {ticker}: Using prevDay close = {close_price}")
+                            logger.info(f"Ticker {ticker}: Using prevDay close (no real-time data) = {close_price}")
                         except (ValueError, TypeError):
                             logger.warning(f"Invalid prevDay close for {ticker}: {prev_day.get('c')}")
                     
                     if close_price is None:
                         logger.warning(f"No valid price found for {ticker}. lastTrade keys: {list(last_trade.keys()) if last_trade else 'None'}, prevDay keys: {list(prev_day.keys()) if prev_day else 'None'}")
-                    
-                    # Store prevDay.close as previous_close for price change calculation
-                    # If current_price is prevDay.close, we need the day before that for previous_close
-                    # For now, we'll use prevDay.close as both current and previous (will be fixed when we have real-time data)
-                    prev_day_close = float(prev_day.get("c", 0)) if prev_day and prev_day.get("c") else None
                     
                     result[ticker] = {
                         "date": today,
@@ -245,7 +242,6 @@ class PolygonService(BaseDataSource):
                         "close": close_price,
                         "volume": int(prev_day.get("v", 0)) if prev_day.get("v") else None,
                         "adj_close": close_price,  # Use close as adj_close
-                        "previous_close": prev_day_close,  # Store prevDay.close for price change calculation
                     }
                 except Exception as e:
                     logger.warning(f"Error processing {ticker} from snapshot: {e}")
