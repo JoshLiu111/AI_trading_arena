@@ -27,25 +27,36 @@ const StrategyReport = ({ competitionStatus, accounts }) => {
   // Fetch AI strategy report when competition is running
   useEffect(() => {
     const fetchAiStrategyReport = async () => {
-      // Only fetch if is_running actually changed
-      if (lastIsRunningRef.current === competitionStatus?.is_running) {
-        return; // No change, skip
-      }
+      // Check if is_running actually changed or if this is the first mount
+      const currentIsRunning = competitionStatus?.is_running || false;
+      const prevIsRunning = lastIsRunningRef.current;
       
-      lastIsRunningRef.current = competitionStatus?.is_running;
-      
-      if (!competitionStatus?.is_running) {
+      // If competition is not running, clear the report
+      if (!currentIsRunning) {
         setStrategyReport(null);
+        // Update ref to track current state
+        lastIsRunningRef.current = currentIsRunning;
         return;
       }
       
-      if (aiAccountId) {
+      // Fetch strategy if:
+      // 1. This is the first mount (prevIsRunning is null/undefined) and competition is running, OR
+      // 2. is_running changed from false to true
+      const shouldFetch = 
+        (prevIsRunning === null || prevIsRunning === undefined) ||
+        (prevIsRunning !== currentIsRunning && currentIsRunning);
+      
+      // Update ref to track current state
+      lastIsRunningRef.current = currentIsRunning;
+      
+      if (shouldFetch && aiAccountId) {
         try {
           const strategyData = await getLatestStrategy(aiAccountId);
           const strategyText = formatStrategyContent(strategyData);
           setStrategyReport(strategyText);
         } catch (err) {
           console.error("Error fetching AI strategy report:", err);
+          setStrategyReport(null);
         }
       }
     };

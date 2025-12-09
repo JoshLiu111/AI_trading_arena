@@ -65,11 +65,17 @@ export function useCompetition({
     loading,
   });
 
-  // Auto-load strategy when in Step 2
+  // Auto-load strategy when in Step 2 or when competition is running (to restore state after remount)
   useEffect(() => {
+    // Load strategy if:
+    // 1. We're in Step 2 and don't have strategy yet, OR
+    // 2. Competition is running and we don't have strategy (to restore after remount)
+    const shouldLoadStrategy = 
+      (currentStep === COMPETITION_CONSTANTS.STEPS.STRATEGY && !strategy) ||
+      (is_running && !strategy);
+    
     if (
-      currentStep === COMPETITION_CONSTANTS.STEPS.STRATEGY &&
-      !strategy &&
+      shouldLoadStrategy &&
       !generatingStrategy &&
       !isAutoLoadingRef.current &&
       aiAccountId.current
@@ -95,7 +101,7 @@ export function useCompetition({
 
       loadStrategyIfNeeded();
     }
-  }, [currentStep, strategy, generatingStrategy]);
+  }, [currentStep, strategy, generatingStrategy, is_running]);
 
   // Generate strategy handler
   const generateStrategyInternal = async (isRegenerate = false) => {

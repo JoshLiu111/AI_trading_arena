@@ -12,14 +12,38 @@ import { COMPETITION_CONSTANTS } from "../constants/competition";
  * @returns {Object} Step state and utilities
  */
 export function useCompetitionSteps({ is_running, strategy, loading }) {
-  const [currentStep, setCurrentStep] = useState(COMPETITION_CONSTANTS.STEPS.START);
+  // Initialize step based on is_running status to handle remounting correctly
+  const getInitialStep = (isRunning, hasStrategy) => {
+    if (isRunning) {
+      return COMPETITION_CONSTANTS.STEPS.TRADING;
+    } else if (hasStrategy) {
+      return COMPETITION_CONSTANTS.STEPS.STRATEGY;
+    } else {
+      return COMPETITION_CONSTANTS.STEPS.START;
+    }
+  };
+  
+  const [currentStep, setCurrentStep] = useState(() => getInitialStep(is_running, !!strategy));
   
   // Use refs to prevent infinite loops
-  const lastIsRunningRef = useRef(null);
-  const lastStrategyRef = useRef(null);
+  const lastIsRunningRef = useRef(is_running);
+  const lastStrategyRef = useRef(strategy);
+  const isInitializedRef = useRef(false);
 
   // Sync currentStep with competition status (only when status actually changes)
   useEffect(() => {
+    // On first mount, initialize refs and step
+    if (!isInitializedRef.current) {
+      lastIsRunningRef.current = is_running;
+      lastStrategyRef.current = strategy;
+      isInitializedRef.current = true;
+      
+      // Set initial step based on current state
+      const initialStep = getInitialStep(is_running, !!strategy);
+      setCurrentStep(initialStep);
+      return;
+    }
+    
     // Only update if is_running or strategy actually changed
     if (lastIsRunningRef.current === is_running && lastStrategyRef.current === strategy) {
       return; // No change, skip update
