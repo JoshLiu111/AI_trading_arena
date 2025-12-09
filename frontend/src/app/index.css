@@ -1212,12 +1212,14 @@ a:hover {
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.05em;
+  vertical-align: top;
 }
 
 .data-table td {
   padding: 1rem;
   border-bottom: 1px solid rgba(139, 92, 246, 0.1);
   color: var(--text-secondary);
+  vertical-align: top;
 }
 
 .data-table tbody tr {
@@ -1267,10 +1269,12 @@ a:hover {
 }
 
 .rationale-cell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: none;
+  min-width: 300px;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.5;
 }
 
 .positions-table-container,
