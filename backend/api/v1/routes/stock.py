@@ -184,6 +184,13 @@ def get_realtime_prices(
         
         enriched_stocks.append(enriched_stock)
     
+    # Log summary for debugging
+    prices_with_data = sum(1 for s in enriched_stocks if s.get("current_price") is not None)
+    logger.info(f"Returning {len(enriched_stocks)} stocks, {prices_with_data} with price data")
+    if prices_with_data < len(enriched_stocks):
+        missing = [s["ticker"] for s in enriched_stocks if s.get("current_price") is None]
+        logger.warning(f"Stocks missing price data: {missing}")
+    
     return {
         "stocks": enriched_stocks,
         "updated_at": datetime.now().isoformat(),
