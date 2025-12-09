@@ -12,7 +12,7 @@ from datetime import datetime
 
 from models.database import get_db, SessionLocal
 from models.crud.stock_price_crud import get_price_history
-from services.datasource.yahoo_realtime_price_service import stock_price_service
+from services.datasource.stock_price_service import stock_price_service
 from config import settings
 
 router = APIRouter(prefix="/api/v1/stocks", tags=["Stocks"])

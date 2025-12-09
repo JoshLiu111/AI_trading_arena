@@ -12,8 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from models.database import SessionLocal
 from config import settings
-from services.datasource.yahoo_history_price_service import YahooService
-from services.datasource.yahoo_info_service import yahoo_info_service
+from services.datasource.data_source_factory import data_source_factory
 from models.crud.stock_crud import get_stock, create_stock
 from models.crud.stock_price_crud import create_price_data
 from datetime import date, timedelta
@@ -21,7 +20,8 @@ from datetime import date, timedelta
 def refresh_all_stocks():
     """Refresh historical data for all stocks in the pool with rate limiting"""
     db = SessionLocal()
-    yahoo = YahooService()
+    data_source = data_source_factory.get_history_service()
+    info_service = data_source_factory.get_info_service()
     
     try:
         print(f"🔄 Refreshing historical data for {len(settings.STOCK_POOL)} stocks...")
@@ -44,7 +44,7 @@ def refresh_all_stocks():
                     time.sleep(2)  # 2 second delay between requests
                 
                 # Fetch historical data for this ticker
-                history = yahoo.get_historical_data(
+                history = data_source.get_historical_data(
                     ticker,
                     start=start_date.isoformat(),
                     end=end_date.isoformat()
@@ -57,7 +57,7 @@ def refresh_all_stocks():
                 # Ensure stock exists in database
                 if not get_stock(db, ticker):
                     print("(creating stock record...)", end=" ", flush=True)
-                    info = yahoo_info_service.get_company_info(ticker)
+                    info = info_service.get_company_info(ticker)
                     if info:
                         create_stock(db, **info)
                     else:

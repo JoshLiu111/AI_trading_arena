@@ -1,7 +1,7 @@
-# backend/services/datasource/yahoo_realtime_price_service.py
+# backend/services/datasource/stock_price_service.py
 
 """
-Yahoo Realtime Price Service - Pure data fetching from Yahoo Finance
+Stock Price Service - Pure data fetching from configured data source
 Only handles data retrieval, no database operations
 """
 
@@ -125,3 +125,4 @@ class StockPriceService:
 
 # Singleton instance
 stock_price_service = StockPriceService()
+

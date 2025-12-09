@@ -13,7 +13,7 @@ from models.database import get_db
 from models.crud.account_crud import get_account, get_all_accounts
 from models.crud.transaction_crud import get_transactions_by_account
 from services.competition.trading_service import trading_service
-from services.datasource.yahoo_realtime_price_service import stock_price_service
+from services.datasource.stock_price_service import stock_price_service
 from schemas import AccountResponse, TransactionResponse
 
 router = APIRouter(prefix="/api/v1/accounts", tags=["Accounts"])

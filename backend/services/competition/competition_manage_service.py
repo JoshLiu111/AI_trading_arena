@@ -366,7 +366,7 @@ class CompetitionService:
                                     break
                         
                         # Get current price
-                        from services.datasource.yahoo_realtime_price_service import stock_price_service
+                        from services.datasource.stock_price_service import stock_price_service
                         current_price = stock_price_service.get_current_price(ticker, db=db)
                         
                         if not current_price:
@@ -516,7 +516,7 @@ class CompetitionService:
                             continue
                         
                         # Get current real-time price
-                        from services.datasource.yahoo_realtime_price_service import stock_price_service
+                        from services.datasource.stock_price_service import stock_price_service
                         current_price = stock_price_service.get_current_price(ticker, db=db)
                         
                         if not current_price:
@@ -611,7 +611,7 @@ class CompetitionService:
                             continue
                         
                         # Get current real-time price
-                        from services.datasource.yahoo_realtime_price_service import stock_price_service
+                        from services.datasource.stock_price_service import stock_price_service
                         current_price = stock_price_service.get_current_price(ticker, db=db)
                         
                         if not current_price:

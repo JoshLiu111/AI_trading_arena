@@ -13,7 +13,7 @@ from models.crud.account_crud import get_account, update_account
 from models.crud.transaction_crud import (
     create_transaction, get_transactions_by_account
 )
-from services.datasource.yahoo_realtime_price_service import stock_price_service
+from services.datasource.stock_price_service import stock_price_service
 from schemas import TransactionResponse
 from core.logging import get_logger
 
