@@ -183,6 +183,7 @@ class PolygonService(BaseDataSource):
             tickers_str = ",".join(tickers)
             endpoint = f"/v2/snapshot/locale/us/markets/stocks/tickers"
             params = {"tickers": tickers_str}
+            logger.debug(f"Fetching snapshot for tickers: {tickers_str}")
             
             data = self._make_request(endpoint, params)
             
