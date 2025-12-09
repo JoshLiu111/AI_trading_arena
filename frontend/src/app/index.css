@@ -1197,6 +1197,7 @@ a:hover {
   border-collapse: collapse;
   margin-top: 1rem;
   font-size: 0.9rem;
+  table-layout: auto;
 }
 
 .data-table thead {
@@ -1281,11 +1282,6 @@ a:hover {
 .transactions-table-container {
   overflow-x: auto;
   margin-top: 1rem;
-}
-
-/* Ensure table headers align with content */
-.data-table {
-  table-layout: auto;
 }
 
 /* Ensure section titles align with table content */
