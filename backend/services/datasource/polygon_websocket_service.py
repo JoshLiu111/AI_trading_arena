@@ -41,7 +41,26 @@ class PolygonWebSocketService:
             self.websocket = await websockets.connect(self.WS_URL)
             logger.info("Connected to Polygon.io WebSocket")
             
-            # Send authentication message
+            # Step 1: Wait for initial "connected" message from server
+            connected_response = await self.websocket.recv()
+            connected_data = json.loads(connected_response)
+            
+            # Verify we received the "connected" message
+            is_connected = False
+            if isinstance(connected_data, list) and len(connected_data) > 0:
+                first_event = connected_data[0]
+                if first_event.get("ev") == "status" and first_event.get("status") == "connected":
+                    is_connected = True
+                    logger.info("Received 'connected' status from Polygon WebSocket")
+            elif isinstance(connected_data, dict):
+                if connected_data.get("ev") == "status" and connected_data.get("status") == "connected":
+                    is_connected = True
+                    logger.info("Received 'connected' status from Polygon WebSocket")
+            
+            if not is_connected:
+                logger.warning(f"Unexpected initial message: {connected_data}")
+            
+            # Step 2: Send authentication message
             auth_msg = {
                 "action": "auth",
                 "params": self.api_key
@@ -49,43 +68,30 @@ class PolygonWebSocketService:
             await self.websocket.send(json.dumps(auth_msg))
             logger.info("Sent authentication message to Polygon WebSocket")
             
-            # Wait for authentication confirmation
+            # Step 3: Wait for "auth_success" message
             auth_response = await self.websocket.recv()
             auth_data = json.loads(auth_response)
             
-            # Polygon WebSocket returns array of events
+            # Parse authentication response
+            auth_success = False
             if isinstance(auth_data, list) and len(auth_data) > 0:
                 first_event = auth_data[0]
                 if first_event.get("ev") == "status" and first_event.get("status") == "auth_success":
+                    auth_success = True
                     logger.info("Polygon WebSocket authentication successful")
                 else:
                     logger.error(f"Polygon WebSocket authentication failed: {first_event}")
-                    raise ValueError(f"WebSocket authentication failed: {first_event}")
             elif isinstance(auth_data, dict):
                 if auth_data.get("ev") == "status" and auth_data.get("status") == "auth_success":
+                    auth_success = True
                     logger.info("Polygon WebSocket authentication successful")
-                elif auth_data.get("ev") == "status" and auth_data.get("status") == "connected":
-                    # Sometimes Polygon sends "connected" first, then "auth_success"
-                    logger.info("WebSocket connected, waiting for auth confirmation...")
-                    # Wait for another message
-                    auth_response2 = await self.websocket.recv()
-                    auth_data2 = json.loads(auth_response2)
-                    if isinstance(auth_data2, list) and len(auth_data2) > 0:
-                        auth_event = auth_data2[0]
-                        if auth_event.get("ev") == "status" and auth_event.get("status") == "auth_success":
-                            logger.info("Polygon WebSocket authentication successful")
-                        else:
-                            logger.error(f"Polygon WebSocket authentication failed: {auth_event}")
-                            raise ValueError(f"WebSocket authentication failed: {auth_event}")
-                    else:
-                        logger.error(f"Unexpected auth response format: {auth_data2}")
-                        raise ValueError("WebSocket authentication failed - unexpected response format")
                 else:
                     logger.error(f"Polygon WebSocket authentication failed: {auth_data}")
-                    raise ValueError(f"WebSocket authentication failed: {auth_data}")
             else:
                 logger.error(f"Unexpected WebSocket auth response format: {auth_data}")
-                raise ValueError("WebSocket authentication failed - unexpected response format")
+            
+            if not auth_success:
+                raise ValueError(f"WebSocket authentication failed. Response: {auth_data}")
             
             self.running = True
         except Exception as e:
