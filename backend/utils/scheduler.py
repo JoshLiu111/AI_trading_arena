@@ -193,7 +193,7 @@ async def lifespan(app):
     # Note: Real-time data uses Alpaca, historical data uses Polygon
     # Polygon WebSocket is no longer used
     try:
-        if data_source == "alpaca":
+        if data_source == "alpaca" and settings.ENABLE_ALPACA_WEBSOCKET:
             from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
             alpaca_ws = get_alpaca_websocket_service()
             if alpaca_ws:
@@ -201,6 +201,8 @@ async def lifespan(app):
                 logger.info("Alpaca WebSocket service started")
             else:
                 logger.warning("Alpaca WebSocket service not available, will use REST API")
+        elif data_source == "alpaca" and not settings.ENABLE_ALPACA_WEBSOCKET:
+            logger.info("Alpaca WebSocket is disabled via ENABLE_ALPACA_WEBSOCKET=false, will use REST API")
         else:
             logger.info("DATA_SOURCE is not 'alpaca', skipping WebSocket (will use REST API)")
     except Exception as e:

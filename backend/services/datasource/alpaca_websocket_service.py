@@ -15,6 +15,10 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Module-level flag to track if connection limit was reached
+# This persists across service recreations
+_alpaca_websocket_connection_limit_reached = False
+
 try:
     from alpaca_trade_api.stream import Stream
     ALPACA_AVAILABLE = True
@@ -27,8 +31,14 @@ class AlpacaWebSocketService:
     """WebSocket service for real-time stock data from Alpaca Markets"""
     
     def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None, base_url: Optional[str] = None):
+        global _alpaca_websocket_connection_limit_reached
+        
         if not ALPACA_AVAILABLE:
             raise ImportError("alpaca-trade-api is not installed. Please install it with: pip install alpaca-trade-api")
+        
+        # Check if connection limit was previously reached
+        if _alpaca_websocket_connection_limit_reached:
+            raise ValueError("Alpaca WebSocket connection limit was previously reached. WebSocket is permanently disabled.")
         
         self.api_key = api_key or settings.ALPACA_API_KEY
         self.api_secret = api_secret or settings.ALPACA_API_SECRET
@@ -43,7 +53,6 @@ class AlpacaWebSocketService:
         self.running = False
         self.task = None
         self.subscribed_tickers: Set[str] = set()
-        self.connection_limit_reached = False  # Flag to prevent reconnection attempts
         
         # Initialize Alpaca Stream
         # Use 'iex' data feed (free tier) or 'sip' (premium)
@@ -120,8 +129,10 @@ class AlpacaWebSocketService:
     
     async def start(self, tickers: list):
         """Start WebSocket connection and subscribe to tickers"""
+        global _alpaca_websocket_connection_limit_reached
+        
         # Don't start if connection limit was previously reached
-        if self.connection_limit_reached:
+        if _alpaca_websocket_connection_limit_reached:
             logger.warning("Alpaca WebSocket connection limit previously reached. Skipping WebSocket startup.")
             logger.info("Will use REST API for real-time prices (WebSocket disabled)")
             return
@@ -149,10 +160,13 @@ class AlpacaWebSocketService:
     
     async def _run_stream(self):
         """Run the Alpaca stream in background"""
+        global _alpaca_websocket_connection_limit_reached
+        
         try:
             # Alpaca stream.run() is blocking, so we need to run it in a thread
             import threading
             def run_stream():
+                global _alpaca_websocket_connection_limit_reached
                 try:
                     self.stream.run()
                 except ValueError as e:
@@ -160,9 +174,9 @@ class AlpacaWebSocketService:
                     if "connection limit exceeded" in error_msg or "connection limit" in error_msg:
                         logger.error("Alpaca WebSocket connection limit exceeded. Permanently disabling WebSocket service.")
                         logger.warning("Will use REST API for real-time prices (WebSocket disabled)")
-                        self.connection_limit_reached = True
+                        _alpaca_websocket_connection_limit_reached = True
                         self.running = False
-                        # Destroy stream to prevent library from retrying
+                        # Destroy stream immediately to prevent library from retrying
                         try:
                             self.stream = None
                         except:
@@ -178,9 +192,9 @@ class AlpacaWebSocketService:
                     if "connection limit" in error_msg or "429" in error_msg or "connection limit exceeded" in error_msg:
                         logger.error("Alpaca WebSocket connection limit exceeded. Permanently disabling WebSocket service.")
                         logger.warning("Will use REST API for real-time prices (WebSocket disabled)")
-                        self.connection_limit_reached = True
+                        _alpaca_websocket_connection_limit_reached = True
                         self.running = False
-                        # Destroy stream to prevent library from retrying
+                        # Destroy stream immediately to prevent library from retrying
                         try:
                             self.stream = None
                         except:
@@ -197,18 +211,18 @@ class AlpacaWebSocketService:
             
             # Keep the async task alive while stream is running
             # Exit immediately if connection limit was reached
-            while self.running and not self.connection_limit_reached:
+            while self.running and not _alpaca_websocket_connection_limit_reached:
                 await asyncio.sleep(1)
             
             # If connection limit was reached, stop the service
-            if self.connection_limit_reached:
+            if _alpaca_websocket_connection_limit_reached:
                 logger.info("Connection limit reached, stopping WebSocket service")
                 await self.stop()
         except Exception as e:
             logger.exception(f"Error running Alpaca stream: {e}")
             logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
             self.running = False
-            self.connection_limit_reached = True  # Prevent future attempts
+            _alpaca_websocket_connection_limit_reached = True  # Prevent future attempts
     
     async def stop(self):
         """Stop WebSocket connection"""
@@ -256,11 +270,31 @@ _alpaca_websocket_service = None
 
 def get_alpaca_websocket_service() -> Optional[AlpacaWebSocketService]:
     """Get or create Alpaca WebSocket service instance"""
-    global _alpaca_websocket_service
+    global _alpaca_websocket_service, _alpaca_websocket_connection_limit_reached
+    
+    # Check if WebSocket is disabled via configuration
+    if not settings.ENABLE_ALPACA_WEBSOCKET:
+        logger.debug("Alpaca WebSocket is disabled via ENABLE_ALPACA_WEBSOCKET=false")
+        return None
+    
+    # Check if connection limit was previously reached
+    if _alpaca_websocket_connection_limit_reached:
+        logger.warning("Alpaca WebSocket connection limit was previously reached. WebSocket is permanently disabled.")
+        logger.info("Will use REST API for real-time prices (WebSocket disabled)")
+        return None
     
     if _alpaca_websocket_service is None:
         try:
             _alpaca_websocket_service = AlpacaWebSocketService()
+        except ValueError as e:
+            # Connection limit error during initialization
+            if "connection limit" in str(e).lower():
+                _alpaca_websocket_connection_limit_reached = True
+                logger.warning("Alpaca WebSocket connection limit reached during initialization. WebSocket is permanently disabled.")
+                logger.info("Will use REST API for real-time prices (WebSocket disabled)")
+            else:
+                logger.warning(f"Failed to initialize Alpaca WebSocket service: {e}")
+            return None
         except Exception as e:
             logger.warning(f"Failed to initialize Alpaca WebSocket service: {e}")
             return None

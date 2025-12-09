@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Options: "polygon" or "alpaca"
     DATA_SOURCE: str = "alpaca"  # Default to Alpaca for real-time data
     
+    # WebSocket Configuration
+    ENABLE_ALPACA_WEBSOCKET: bool = True  # Set to False to disable Alpaca WebSocket (will use REST API)
+    
     # Competition Settings
     DEFAULT_BALANCE: float = 1000000.00
     TRADING_INTERVAL_MINUTES: int = 30  # Auto-trading interval (30 minutes)
