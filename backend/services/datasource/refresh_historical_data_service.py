@@ -19,9 +19,21 @@ class RefreshHistoricalDataService:
     """Service for refreshing and saving stock historical data to database"""
     
     def __init__(self):
-        self.history_service = data_source_factory.get_history_service()
-        self.info_service = data_source_factory.get_info_service()
+        self._history_service = None  # Lazy initialization
+        self._info_service = None  # Lazy initialization
         self.stock_pool = settings.STOCK_POOL
+    
+    def _get_history_service(self):
+        """Get history service instance (lazy initialization)"""
+        if self._history_service is None:
+            self._history_service = data_source_factory.get_history_service()
+        return self._history_service
+    
+    def _get_info_service(self):
+        """Get info service instance (lazy initialization)"""
+        if self._info_service is None:
+            self._info_service = data_source_factory.get_info_service()
+        return self._info_service
     
     def refresh_historical_data(self, db: Session, days: int = 7) -> int:
         """
@@ -34,7 +46,7 @@ class RefreshHistoricalDataService:
         start_date = end_date - timedelta(days=days + 5)  # Extra days for market closures
         
         # Fetch data from datasource (pure data fetching)
-        bulk_data = self.history_service.download_bulk(
+        bulk_data = self._get_history_service().download_bulk(
             self.stock_pool,
             start=start_date.isoformat(),
             end=end_date.isoformat()
@@ -47,7 +59,7 @@ class RefreshHistoricalDataService:
             if not get_stock(db, ticker):
                 # Add delay to avoid rate limiting (429 errors)
                 time.sleep(3)  # Wait 3 seconds between requests to avoid rate limiting
-                info = self.info_service.get_company_info(ticker)
+                info = self._get_info_service().get_company_info(ticker)
                 if info:
                     create_stock(db, **info)
             

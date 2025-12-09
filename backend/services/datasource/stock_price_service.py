@@ -23,10 +23,16 @@ class StockPriceService:
     """
     
     def __init__(self):
-        self.data_source = data_source_factory.get_realtime_service()
+        self._data_source = None  # Lazy initialization
         self.stock_pool = settings.STOCK_POOL
         self._websocket_service = None
         self._websocket_initialized = False
+    
+    def _get_data_source(self):
+        """Get data source instance (lazy initialization)"""
+        if self._data_source is None:
+            self._data_source = data_source_factory.get_realtime_service()
+        return self._data_source
     
     def get_realtime_prices(self, db: Session = None) -> List[Dict]:
         """
@@ -69,9 +75,9 @@ class StockPriceService:
                 if any(ws_prices.values()):
                     prices = ws_prices
                 else:
-                    prices = self.data_source.get_latest_prices_bulk(self.stock_pool)
+                    prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
             else:
-                prices = self.data_source.get_latest_prices_bulk(self.stock_pool)
+                prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
             
             for ticker in self.stock_pool:
                 price_data = prices.get(ticker)
@@ -108,7 +114,7 @@ class StockPriceService:
             return None
         else:
             # Normal mode: fetch from configured data source
-            prices = self.data_source.get_latest_prices_bulk([ticker])
+            prices = self._get_data_source().get_latest_prices_bulk([ticker])
             price_data = prices.get(ticker)
             return price_data.get("close") if price_data else None
     
@@ -133,9 +139,9 @@ class StockPriceService:
                 if any(ws_prices.values()):
                     prices = ws_prices
                 else:
-                    prices = self.data_source.get_latest_prices_bulk(tickers)
+                    prices = self._get_data_source().get_latest_prices_bulk(tickers)
             else:
-                prices = self.data_source.get_latest_prices_bulk(tickers)
+                prices = self._get_data_source().get_latest_prices_bulk(tickers)
             for ticker in tickers:
                 price_data = prices.get(ticker)
                 result[ticker] = price_data.get("close") if price_data else None
