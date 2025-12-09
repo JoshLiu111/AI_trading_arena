@@ -14,7 +14,8 @@ psycopg[binary]>=3.2.0  # psycopg3 - Updated for Python 3.13 compatibility
 # HTTP client (for AI API and data sources)
 httpx==0.26.0
 requests>=2.31.0  # For Polygon.io API
-websockets>=12.0  # For Polygon.io WebSocket support
+# websockets version: alpaca-trade-api requires <11, Polygon WebSocket works with 10.x
+websockets>=10.0,<11.0  # Compatible with both Alpaca and Polygon WebSocket
 alpaca-trade-api>=3.0.0  # For Alpaca Markets API (real-time and historical data)
 
 # Stock data
