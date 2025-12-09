@@ -1283,6 +1283,17 @@ a:hover {
   margin-top: 1rem;
 }
 
+/* Ensure table headers align with content */
+.data-table {
+  table-layout: auto;
+}
+
+/* Ensure section titles align with table content */
+.stock-card .section-title {
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
 .account-card-link {
   text-decoration: none;
   color: inherit;
