@@ -1310,7 +1310,8 @@ a:hover {
   }
 
   .rationale-cell {
-    max-width: 200px;
+    max-width: none;
+    min-width: 200px;
     white-space: normal;
     word-wrap: break-word;
     overflow-wrap: break-word;
