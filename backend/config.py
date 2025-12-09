@@ -47,7 +47,8 @@ class Settings(BaseSettings):
     DATA_SOURCE: str = "alpaca"  # Default to Alpaca for real-time data
     
     # WebSocket Configuration
-    ENABLE_ALPACA_WEBSOCKET: bool = True  # Set to False to disable Alpaca WebSocket (will use REST API)
+    # WebSocket is disabled by default for stability - using REST API with caching instead
+    ENABLE_ALPACA_WEBSOCKET: bool = False  # Set to True to enable (not recommended - causes connection issues)
     
     # Competition Settings
     DEFAULT_BALANCE: float = 1000000.00

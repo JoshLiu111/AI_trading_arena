@@ -25,13 +25,15 @@ class TradingScheduler:
         self.running = False
         self.trading_task = None
         self.historical_data_task = None
+        self.realtime_data_task = None
     
     async def start(self):
-        """Start the background trading loop and historical data refresh"""
+        """Start the background trading loop, historical data refresh, and real-time data update"""
         self.running = True
         self.trading_task = asyncio.create_task(self._trading_loop())
         self.historical_data_task = asyncio.create_task(self._historical_data_refresh_loop())
-        logger.info("Trading scheduler started (trading + historical data refresh)")
+        self.realtime_data_task = asyncio.create_task(self._realtime_data_update_loop())
+        logger.info("Trading scheduler started (trading + historical data refresh + real-time data update)")
     
     async def stop(self):
         """Stop the background trading loop"""
@@ -46,6 +48,12 @@ class TradingScheduler:
             self.historical_data_task.cancel()
             try:
                 await self.historical_data_task
+            except asyncio.CancelledError:
+                pass
+        if self.realtime_data_task:
+            self.realtime_data_task.cancel()
+            try:
+                await self.realtime_data_task
             except asyncio.CancelledError:
                 pass
         logger.info("Trading scheduler stopped")
@@ -91,34 +99,34 @@ class TradingScheduler:
                 logger.exception("Trading loop error")
     
     async def _historical_data_refresh_loop(self):
-        """Historical data refresh loop - runs twice daily (9:00 AM and 4:00 PM ET)"""
-        # Set refresh times (9:00 AM and 4:00 PM ET)
-        et_tz = pytz.timezone('US/Eastern')
-        refresh_times = [time(9, 0), time(16, 0)]  # 9 AM and 4 PM
+        """Historical data refresh loop - runs twice daily (08:00 UTC and 20:00 UTC)"""
+        # Set refresh times (08:00 UTC and 20:00 UTC)
+        utc_tz = pytz.timezone('UTC')
+        refresh_times = [time(8, 0), time(20, 0)]  # 8 AM and 8 PM UTC
         
         while self.running:
             try:
-                # Get current time in ET
-                now_et = datetime.now(et_tz)
-                current_time = now_et.time()
+                # Get current time in UTC
+                now_utc = datetime.now(utc_tz)
+                current_time = now_utc.time()
                 
                 # Find next refresh time
                 next_refresh = None
                 for refresh_time in refresh_times:
                     # If current time is before this refresh time today, use it
                     if current_time < refresh_time:
-                        next_refresh = datetime.combine(now_et.date(), refresh_time)
-                        next_refresh = et_tz.localize(next_refresh)
+                        next_refresh = datetime.combine(now_utc.date(), refresh_time)
+                        next_refresh = utc_tz.localize(next_refresh)
                         break
                 
                 # If no refresh time found today, use first one tomorrow
                 if next_refresh is None:
-                    tomorrow = now_et.date() + timedelta(days=1)
+                    tomorrow = now_utc.date() + timedelta(days=1)
                     next_refresh = datetime.combine(tomorrow, refresh_times[0])
-                    next_refresh = et_tz.localize(next_refresh)
+                    next_refresh = utc_tz.localize(next_refresh)
                 
                 # Calculate seconds until next refresh
-                wait_seconds = (next_refresh - now_et).total_seconds()
+                wait_seconds = (next_refresh - now_utc).total_seconds()
                 
                 if wait_seconds > 0:
                     logger.info(f"Historical data refresh scheduled for {next_refresh.strftime('%Y-%m-%d %H:%M:%S %Z')} (in {wait_seconds/3600:.1f} hours)")
@@ -145,6 +153,30 @@ class TradingScheduler:
             except Exception as e:
                 logger.exception("Historical data refresh loop error")
                 await asyncio.sleep(300)  # Wait 5 minutes before retrying on error
+    
+    async def _realtime_data_update_loop(self):
+        """Real-time data update loop - runs every 30 minutes"""
+        from services.datasource.alpaca_realtime_updater import alpaca_realtime_updater
+        
+        interval = 30 * 60  # 30 minutes in seconds
+        
+        while self.running:
+            try:
+                await asyncio.sleep(interval)
+                
+                logger.info(f"Starting real-time price update at {datetime.now()}")
+                try:
+                    results = alpaca_realtime_updater.update_all_prices()
+                    success_count = sum(1 for success in results.values() if success)
+                    logger.info(f"Real-time price update completed: {success_count}/{len(results)} stocks updated")
+                except Exception as e:
+                    logger.exception("Error updating real-time prices")
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.exception("Real-time data update loop error")
+                await asyncio.sleep(60)  # Wait 1 minute before retrying on error
 
 
 # Singleton instance
@@ -189,38 +221,21 @@ async def lifespan(app):
     # Start trading scheduler
     await scheduler.start()
     
-    # Start WebSocket service for Alpaca (optional - will fallback to REST API if fails)
-    # Note: Real-time data uses Alpaca, historical data uses Polygon
-    # Polygon WebSocket is no longer used
+    # WebSocket is disabled - using REST API with caching instead
+    # Real-time data is updated every 30 minutes via scheduler
+    # Historical data is updated twice daily (08:00 UTC, 20:00 UTC)
+    logger.info("Using REST API with caching (WebSocket disabled for stability)")
+    
+    # Trigger initial real-time data update (non-blocking)
     try:
-        if data_source == "alpaca" and settings.ENABLE_ALPACA_WEBSOCKET:
-            from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
-            alpaca_ws = get_alpaca_websocket_service()
-            if alpaca_ws:
-                await alpaca_ws.start(settings.STOCK_POOL)
-                logger.info("Alpaca WebSocket service started")
-            else:
-                logger.warning("Alpaca WebSocket service not available, will use REST API")
-        elif data_source == "alpaca" and not settings.ENABLE_ALPACA_WEBSOCKET:
-            logger.info("Alpaca WebSocket is disabled via ENABLE_ALPACA_WEBSOCKET=false, will use REST API")
-        else:
-            logger.info("DATA_SOURCE is not 'alpaca', skipping WebSocket (will use REST API)")
+        from services.datasource.alpaca_realtime_updater import alpaca_realtime_updater
+        # Run initial update in background
+        asyncio.create_task(asyncio.to_thread(alpaca_realtime_updater.update_all_prices))
+        logger.info("Initial real-time price update triggered")
     except Exception as e:
-        logger.warning(f"Failed to start Alpaca WebSocket service: {e}")
-        logger.info("Will use REST API for real-time prices (WebSocket unavailable)")
+        logger.warning(f"Failed to trigger initial real-time price update: {e}")
     
     yield
     
     # Stop trading scheduler on shutdown
     await scheduler.stop()
-    
-    # Stop WebSocket service on shutdown
-    try:
-        if data_source == "alpaca":
-            from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
-            alpaca_ws = get_alpaca_websocket_service()
-            if alpaca_ws:
-                await alpaca_ws.stop()
-                logger.info("Alpaca WebSocket service stopped")
-    except Exception as e:
-        logger.warning(f"Failed to stop Alpaca WebSocket service: {e}")

@@ -156,18 +156,85 @@ class PolygonService(BaseDataSource):
     ) -> Dict[str, List[Dict]]:
         """
         Bulk download historical price data for multiple tickers
-        Polygon doesn't support true bulk download, so we call individually
+        Optimized: Uses Polygon Aggregates endpoint to fetch all data in single request per ticker
         """
         result = {}
         total = len(tickers)
+        
+        # Calculate date range
+        if start and end:
+            start_date = start
+            end_date = end
+        else:
+            from datetime import date, timedelta
+            end_date = date.today()
+            if period == "1y":
+                start_date = (end_date - timedelta(days=365)).isoformat()
+            elif period == "6mo":
+                start_date = (end_date - timedelta(days=180)).isoformat()
+            elif period == "3mo":
+                start_date = (end_date - timedelta(days=90)).isoformat()
+            elif period == "1mo":
+                start_date = (end_date - timedelta(days=30)).isoformat()
+            else:
+                start_date = (end_date - timedelta(days=365)).isoformat()
+            end_date = end_date.isoformat()
+        
+        # Fetch all stocks (can be parallelized, but keeping sequential for now to avoid rate limits)
         for i, ticker in enumerate(tickers, 1):
-            logger.info(f"Downloading {ticker} ({i}/{total})...")
-            result[ticker] = self.get_historical_data(ticker, period, start, end)
-            if not result[ticker]:
-                logger.warning(f"No data received for {ticker}")
-            # Small delay to avoid overwhelming the API
-            if i < total:
-                time.sleep(0.1)  # 100ms delay between requests
+            logger.info(f"Downloading {ticker} ({i}/{total}) from {start_date} to {end_date}...")
+            try:
+                # Use optimized bulk endpoint: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{start}/{end}
+                # This fetches all historical data in a single request
+                endpoint = f"/v2/aggs/ticker/{ticker}/range/1/day/{start_date}/{end_date}"
+                params = {"limit": 50000}  # Maximum limit to get all data
+                
+                data = self._make_request(endpoint, params)
+                
+                # Parse response
+                if "results" not in data or not data["results"]:
+                    logger.warning(f"No historical data found for {ticker}")
+                    result[ticker] = []
+                    continue
+                
+                results = data["results"]
+                ticker_data = []
+                
+                # Convert to standard format
+                for item in results:
+                    try:
+                        # Polygon returns Unix timestamp in milliseconds
+                        timestamp_ms = item.get("t", 0)
+                        price_date = datetime.fromtimestamp(timestamp_ms / 1000).date()
+                        
+                        ticker_data.append({
+                            "date": price_date,
+                            "open": float(item.get("o", 0)) if item.get("o") else None,
+                            "high": float(item.get("h", 0)) if item.get("h") else None,
+                            "low": float(item.get("l", 0)) if item.get("l") else None,
+                            "close": float(item.get("c", 0)) if item.get("c") else None,
+                            "volume": int(item.get("v", 0)) if item.get("v") else None,
+                            "adj_close": float(item.get("c", 0)) if item.get("c") else None,
+                        })
+                    except (ValueError, KeyError) as e:
+                        logger.debug(f"Error parsing data for {ticker}: {e}")
+                        continue
+                
+                # Sort by date (ascending)
+                ticker_data.sort(key=lambda x: x["date"])
+                result[ticker] = ticker_data
+                
+                if not result[ticker]:
+                    logger.warning(f"No data received for {ticker}")
+                
+                # Small delay to avoid rate limiting
+                if i < total:
+                    time.sleep(0.2)  # 200ms delay between requests
+                    
+            except Exception as e:
+                logger.exception(f"Error downloading {ticker}: {e}")
+                result[ticker] = []
+        
         return result
     
     def get_latest_prices_bulk(self, tickers: List[str]) -> Dict[str, Optional[Dict]]:

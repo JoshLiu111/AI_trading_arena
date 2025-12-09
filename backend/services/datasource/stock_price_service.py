@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from config import settings
-from services.datasource.data_source_factory import data_source_factory
+from services.datasource.price_cache_service import price_cache_service
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -18,15 +18,13 @@ logger = get_logger(__name__)
 
 class StockPriceService:
     """
-    Pure data fetching service for stock prices
-    No database operations - only fetches data from configured data source
+    Stock price service - reads from cache and database
+    Never calls external APIs - all data comes from cache or database
     """
     
     def __init__(self):
-        self._data_source = None  # Lazy initialization
         self.stock_pool = settings.STOCK_POOL
-        self._websocket_service = None
-        self._websocket_initialized = False
+        self._test_mode_logged = False  # Flag to log test mode message only once
     
     def _get_data_source(self):
         """Get data source instance (lazy initialization)"""
