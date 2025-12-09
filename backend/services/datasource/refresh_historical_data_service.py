@@ -41,9 +41,12 @@ class RefreshHistoricalDataService:
         )
         
         count = 0
+        import time
         for ticker, history in bulk_data.items():
             # Ensure stock exists in database
             if not get_stock(db, ticker):
+                # Add delay to avoid rate limiting (429 errors)
+                time.sleep(1)  # Wait 1 second between requests
                 info = yahoo_info_service.get_company_info(ticker)
                 if info:
                     create_stock(db, **info)

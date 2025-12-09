@@ -30,7 +30,10 @@ def _create_missing_stocks_background(missing_tickers: List[str]):
         still_missing = [ticker for ticker in missing_tickers if ticker not in existing_stocks]
         
         if still_missing:
-            for ticker in still_missing:
+            import time
+            for i, ticker in enumerate(still_missing):
+                if i > 0:  # Don't delay before first request
+                    time.sleep(1)  # Wait 1 second between requests to avoid rate limiting
                 try:
                     info = yahoo_info_service.get_company_info(ticker)
                     if info:
@@ -52,9 +55,12 @@ def _update_stock_info_background(tickers: List[str]):
     try:
         stocks = get_stocks_by_tickers(db, tickers)
         
-        for ticker, stock in stocks.items():
+        import time
+        for i, (ticker, stock) in enumerate(stocks.items()):
             # Check if stock needs company info
             if not stock.sector or not stock.sic_description or not stock.homepage_url:
+                if i > 0:  # Don't delay before first request
+                    time.sleep(1)  # Wait 1 second between requests to avoid rate limiting
                 try:
                     info = yahoo_info_service.get_company_info(ticker)
                     if info:

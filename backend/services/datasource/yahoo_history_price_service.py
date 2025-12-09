@@ -19,39 +19,52 @@ class YahooService:
         ticker: str, 
         period: str = "1y",
         start: Optional[str] = None,
-        end: Optional[str] = None
+        end: Optional[str] = None,
+        retries: int = 3
     ) -> List[Dict]:
-        """Get historical price data for a single ticker"""
-        try:
-            stock = yf.Ticker(ticker)
-            
-            if start and end:
-                df = stock.history(start=start, end=end)
-            else:
-                df = stock.history(period=period)
-            
-            if df.empty:
+        """Get historical price data for a single ticker with retry logic"""
+        import time
+        for attempt in range(retries):
+            try:
+                stock = yf.Ticker(ticker)
+                
+                if start and end:
+                    df = stock.history(start=start, end=end)
+                else:
+                    df = stock.history(period=period)
+                
+                if df.empty:
+                    return []
+                
+                result = []
+                for index, row in df.iterrows():
+                    result.append({
+                        "date": index.date() if isinstance(index, pd.Timestamp) else index,
+                        "open": float(row["Open"]) if pd.notna(row["Open"]) else None,
+                        "high": float(row["High"]) if pd.notna(row["High"]) else None,
+                        "low": float(row["Low"]) if pd.notna(row["Low"]) else None,
+                        "close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                        "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else None,
+                        "adj_close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                    })
+                
+                return result
+                
+            except Exception as e:
+                from core.logging import get_logger
+                logger = get_logger(__name__)
+                error_str = str(e).lower()
+                is_rate_limit = "429" in error_str or "too many requests" in error_str or "rate limit" in error_str
+                
+                if attempt < retries - 1:
+                    wait_time = (2 ** attempt) * (5 if is_rate_limit else 1)  # Longer wait for rate limits
+                    logger.warning(f"Error fetching historical data for {ticker} (attempt {attempt + 1}/{retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                logger.exception(f"Error fetching historical data for {ticker} after {retries} attempts")
                 return []
-            
-            result = []
-            for index, row in df.iterrows():
-                result.append({
-                    "date": index.date() if isinstance(index, pd.Timestamp) else index,
-                    "open": float(row["Open"]) if pd.notna(row["Open"]) else None,
-                    "high": float(row["High"]) if pd.notna(row["High"]) else None,
-                    "low": float(row["Low"]) if pd.notna(row["Low"]) else None,
-                    "close": float(row["Close"]) if pd.notna(row["Close"]) else None,
-                    "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else None,
-                    "adj_close": float(row["Close"]) if pd.notna(row["Close"]) else None,
-                })
-            
-            return result
-            
-        except Exception as e:
-            from core.logging import get_logger
-            logger = get_logger(__name__)
-            logger.exception(f"Error fetching historical data for {ticker}")
-            return []
+        
+        return []
 
     def download_bulk(
         self, 
@@ -63,9 +76,13 @@ class YahooService:
         """
         Bulk download historical price data for multiple tickers
         For 5-10 stocks, simple loop is sufficient
+        Adds delay to avoid rate limiting
         """
+        import time
         result = {}
-        for ticker in tickers:
+        for i, ticker in enumerate(tickers):
+            if i > 0:  # Don't delay before first request
+                time.sleep(0.5)  # Wait 0.5 seconds between requests to avoid rate limiting
             result[ticker] = self.get_historical_data(ticker, period, start, end)
         return result
 
