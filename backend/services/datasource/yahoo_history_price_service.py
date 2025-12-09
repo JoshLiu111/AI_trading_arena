@@ -156,49 +156,72 @@ class YahooService:
         
         # If we get here, bulk download succeeded - process the data
         # Process bulk download results
-        # yfinance returns multi-level columns: (PriceType, Ticker) for multiple tickers
+        # yfinance returns multi-level columns: (PriceType, Ticker) or (Ticker, PriceType) for multiple tickers
         # or single-level columns for single ticker
         
+        logger.info(f"Bulk download succeeded. DataFrame shape: {df.shape}, columns sample: {df.columns.tolist()[:10]}")
+        
         for ticker in tickers:
-                try:
-                    if len(tickers) == 1:
-                        # Single ticker: columns are just 'Open', 'High', etc.
-                        ticker_data = []
-                        for index, row in df.iterrows():
+            try:
+                if len(tickers) == 1:
+                    # Single ticker: columns are just 'Open', 'High', etc.
+                    ticker_data = []
+                    for index, row in df.iterrows():
+                        ticker_data.append({
+                            "date": index.date() if isinstance(index, pd.Timestamp) else index,
+                            "open": float(row["Open"]) if pd.notna(row["Open"]) else None,
+                            "high": float(row["High"]) if pd.notna(row["High"]) else None,
+                            "low": float(row["Low"]) if pd.notna(row["Low"]) else None,
+                            "close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                            "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else None,
+                            "adj_close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                        })
+                    result[ticker] = ticker_data
+                else:
+                    # Multiple tickers: columns are tuples
+                    # Try (Ticker, PriceType) format first, then (PriceType, Ticker) format
+                    ticker_data = []
+                    column_format = None
+                    
+                    # Check which format is used
+                    if (ticker, "Close") in df.columns:
+                        column_format = "ticker_first"  # (Ticker, PriceType)
+                    elif ("Close", ticker) in df.columns:
+                        column_format = "price_first"  # (PriceType, Ticker)
+                    else:
+                        logger.warning(f"Ticker {ticker} not found in bulk download results. Available columns: {[c for c in df.columns if isinstance(c, tuple)][:5]}")
+                        result[ticker] = self.get_historical_data(ticker, period, start, end)
+                        continue
+                    
+                    # Process data based on column format
+                    for index, row in df.iterrows():
+                        if column_format == "ticker_first":
+                            # Format: (Ticker, PriceType) e.g., ('AAPL', 'Close')
                             ticker_data.append({
                                 "date": index.date() if isinstance(index, pd.Timestamp) else index,
-                                "open": float(row["Open"]) if pd.notna(row["Open"]) else None,
-                                "high": float(row["High"]) if pd.notna(row["High"]) else None,
-                                "low": float(row["Low"]) if pd.notna(row["Low"]) else None,
-                                "close": float(row["Close"]) if pd.notna(row["Close"]) else None,
-                                "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else None,
-                                "adj_close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                                "open": float(row[(ticker, "Open")]) if pd.notna(row[(ticker, "Open")]) else None,
+                                "high": float(row[(ticker, "High")]) if pd.notna(row[(ticker, "High")]) else None,
+                                "low": float(row[(ticker, "Low")]) if pd.notna(row[(ticker, "Low")]) else None,
+                                "close": float(row[(ticker, "Close")]) if pd.notna(row[(ticker, "Close")]) else None,
+                                "volume": int(row[(ticker, "Volume")]) if pd.notna(row[(ticker, "Volume")]) else None,
+                                "adj_close": float(row[(ticker, "Adj Close")]) if (ticker, "Adj Close") in df.columns and pd.notna(row[(ticker, "Adj Close")]) else None,
                             })
-                        result[ticker] = ticker_data
-                    else:
-                        # Multiple tickers: columns are tuples like ('Open', 'AAPL')
-                        # Check if ticker exists in columns
-                        if ("Close", ticker) in df.columns:
-                            ticker_data = []
-                            for index, row in df.iterrows():
-                                ticker_data.append({
-                                    "date": index.date() if isinstance(index, pd.Timestamp) else index,
-                                    "open": float(row[("Open", ticker)]) if pd.notna(row[("Open", ticker)]) else None,
-                                    "high": float(row[("High", ticker)]) if pd.notna(row[("High", ticker)]) else None,
-                                    "low": float(row[("Low", ticker)]) if pd.notna(row[("Low", ticker)]) else None,
-                                    "close": float(row[("Close", ticker)]) if pd.notna(row[("Close", ticker)]) else None,
-                                    "volume": int(row[("Volume", ticker)]) if pd.notna(row[("Volume", ticker)]) else None,
-                                    "adj_close": float(row[("Adj Close", ticker)]) if ("Adj Close", ticker) in df.columns and pd.notna(row[("Adj Close", ticker)]) else None,
-                                })
-                            result[ticker] = ticker_data
                         else:
-                            logger.warning(f"Ticker {ticker} not found in bulk download results, falling back to individual request")
-                            # Fallback to individual request for this ticker
-                            result[ticker] = self.get_historical_data(ticker, period, start, end)
-                except Exception as e:
-                    logger.warning(f"Error processing {ticker} from bulk download: {e}, falling back to individual request")
-                    # Fallback to individual request if processing fails
-                    result[ticker] = self.get_historical_data(ticker, period, start, end)
+                            # Format: (PriceType, Ticker) e.g., ('Close', 'AAPL')
+                            ticker_data.append({
+                                "date": index.date() if isinstance(index, pd.Timestamp) else index,
+                                "open": float(row[("Open", ticker)]) if pd.notna(row[("Open", ticker)]) else None,
+                                "high": float(row[("High", ticker)]) if pd.notna(row[("High", ticker)]) else None,
+                                "low": float(row[("Low", ticker)]) if pd.notna(row[("Low", ticker)]) else None,
+                                "close": float(row[("Close", ticker)]) if pd.notna(row[("Close", ticker)]) else None,
+                                "volume": int(row[("Volume", ticker)]) if pd.notna(row[("Volume", ticker)]) else None,
+                                "adj_close": float(row[("Adj Close", ticker)]) if ("Adj Close", ticker) in df.columns and pd.notna(row[("Adj Close", ticker)]) else None,
+                            })
+                    result[ticker] = ticker_data
+            except Exception as e:
+                logger.warning(f"Error processing {ticker} from bulk download: {e}, falling back to individual request")
+                # Fallback to individual request if processing fails
+                result[ticker] = self.get_historical_data(ticker, period, start, end)
             
         return result
 
@@ -234,8 +257,21 @@ class YahooService:
                             "adj_close": float(last_row["Close"]) if pd.notna(last_row["Close"]) else None,
                         }
                     else:
-                        # Multiple tickers: columns are tuples like ('Close', 'AAPL') - note: (PriceType, Ticker) order
-                        if ("Close", ticker) in df.columns:
+                        # Multiple tickers: columns are tuples
+                        # Try (Ticker, PriceType) format first, then (PriceType, Ticker) format
+                        if (ticker, "Close") in df.columns:
+                            # Format: (Ticker, PriceType) e.g., ('AAPL', 'Close')
+                            result[ticker] = {
+                                "date": last_date.date() if isinstance(last_date, pd.Timestamp) else last_date,
+                                "open": float(last_row[(ticker, "Open")]) if pd.notna(last_row[(ticker, "Open")]) else None,
+                                "high": float(last_row[(ticker, "High")]) if pd.notna(last_row[(ticker, "High")]) else None,
+                                "low": float(last_row[(ticker, "Low")]) if pd.notna(last_row[(ticker, "Low")]) else None,
+                                "close": float(last_row[(ticker, "Close")]) if pd.notna(last_row[(ticker, "Close")]) else None,
+                                "volume": int(last_row[(ticker, "Volume")]) if pd.notna(last_row[(ticker, "Volume")]) else None,
+                                "adj_close": float(last_row[(ticker, "Adj Close")]) if (ticker, "Adj Close") in df.columns and pd.notna(last_row[(ticker, "Adj Close")]) else None,
+                            }
+                        elif ("Close", ticker) in df.columns:
+                            # Format: (PriceType, Ticker) e.g., ('Close', 'AAPL')
                             result[ticker] = {
                                 "date": last_date.date() if isinstance(last_date, pd.Timestamp) else last_date,
                                 "open": float(last_row[("Open", ticker)]) if pd.notna(last_row[("Open", ticker)]) else None,
@@ -248,7 +284,7 @@ class YahooService:
                         else:
                             from core.logging import get_logger
                             logger = get_logger(__name__)
-                            logger.warning(f"Column ('Close', '{ticker}') not found in DataFrame. Available columns: {df.columns.tolist()[:10]}")
+                            logger.warning(f"Column for '{ticker}' not found in DataFrame. Available columns: {df.columns.tolist()[:10]}")
                             result[ticker] = None
                 except Exception as e:
                     from core.logging import get_logger
