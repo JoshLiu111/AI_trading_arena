@@ -170,3 +170,4 @@ class StockPriceService:
 
 # Singleton instance
 stock_price_service = StockPriceService()
+# Force redeploy
