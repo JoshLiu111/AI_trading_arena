@@ -110,11 +110,12 @@ class AlphaVantageService(BaseDataSource):
                     end = end_date.isoformat()
                 
                 # Call Alpha Vantage API
+                # Use TIME_SERIES_DAILY (free) instead of TIME_SERIES_DAILY_ADJUSTED (premium)
                 # Use "compact" for last 100 data points (faster) or "full" for all data
                 # For 7 days, "compact" is sufficient
                 outputsize = "compact" if not start or (start and end and (date.fromisoformat(end) - date.fromisoformat(start)).days < 100) else "full"
                 logger.debug(f"Fetching historical data for {ticker} with outputsize={outputsize}")
-                data = self._make_request("TIME_SERIES_DAILY_ADJUSTED", ticker, outputsize=outputsize)
+                data = self._make_request("TIME_SERIES_DAILY", ticker, outputsize=outputsize)
                 
                 # Parse response
                 time_series_key = "Time Series (Daily)"
@@ -145,14 +146,17 @@ class AlphaVantageService(BaseDataSource):
                                 continue
                         
                         # Map Alpha Vantage fields to standard format
+                        # TIME_SERIES_DAILY has: 1. open, 2. high, 3. low, 4. close, 5. volume
+                        # (No adjusted close in free endpoint, use close as adj_close)
+                        close_price = float(values.get("4. close", 0)) if values.get("4. close") else None
                         result.append({
                             "date": price_date,
                             "open": float(values.get("1. open", 0)) if values.get("1. open") else None,
                             "high": float(values.get("2. high", 0)) if values.get("2. high") else None,
                             "low": float(values.get("3. low", 0)) if values.get("3. low") else None,
-                            "close": float(values.get("4. close", 0)) if values.get("4. close") else None,
-                            "volume": int(values.get("6. volume", 0)) if values.get("6. volume") else None,
-                            "adj_close": float(values.get("5. adjusted close", 0)) if values.get("5. adjusted close") else None,
+                            "close": close_price,
+                            "volume": int(values.get("5. volume", 0)) if values.get("5. volume") else None,
+                            "adj_close": close_price,  # Use close as adj_close since free endpoint doesn't have adjusted close
                         })
                     except (ValueError, KeyError) as e:
                         logger.debug(f"Error parsing date {date_str} for {ticker}: {e}")
