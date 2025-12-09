@@ -45,9 +45,10 @@ const CompetitionFlow = ({ competitionStatus: initialCompetitionStatus, onStatus
             actions={
               <button
                 onClick={handleStartCompetition}
+                disabled={loading}
                 className="btn-primary competition-btn"
               >
-                Start Competition
+                {loading ? "Starting Competition (this may take a few minutes)..." : "Start Competition"}
               </button>
             }
           />

@@ -128,12 +128,34 @@ export function useCompetition({
     isAutoLoadingRef.current = false;
   };
 
-  // Step 1: Start Competition - Navigate to step 2
-  const handleStartCompetition = () => {
-    resetAutoLoading();
-    clearStrategy();
-    setCurrentStep(COMPETITION_CONSTANTS.STEPS.STRATEGY);
-    setError(null);
+  // Step 1: Start Competition - Actually start the competition (initialize data)
+  const handleStartCompetition = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      resetAutoLoading();
+      clearStrategy();
+      
+      // Actually start the competition (this will create accounts, refresh stock data, etc.)
+      // Use startTrading which calls startCompetition API without confirmation dialog
+      const result = await competitionService.startTrading();
+      
+      if (result.success && result.status) {
+        setCompetitionStatus(result.status);
+        // Navigate to step 2 after competition is started
+        setCurrentStep(COMPETITION_CONSTANTS.STEPS.STRATEGY);
+      } else {
+        handleCompetitionError(
+          result.error || "Failed to start competition",
+          setError,
+          "Failed to start competition"
+        );
+      }
+    } catch (err) {
+      handleCompetitionError(err, setError, "Failed to start competition");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Restart Competition
