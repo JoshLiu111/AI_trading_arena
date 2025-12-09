@@ -1,8 +1,8 @@
 # backend/services/datasource/stock_price_service.py
 
 """
-Stock Price Service - Pure data fetching from configured data source
-Only handles data retrieval, no database operations
+Stock Price Service - Reads from cache and database
+Never calls external APIs - all data comes from cache or database
 """
 
 from typing import List, Dict, Optional
@@ -26,23 +26,18 @@ class StockPriceService:
         self.stock_pool = settings.STOCK_POOL
         self._test_mode_logged = False  # Flag to log test mode message only once
     
-    def _get_data_source(self):
-        """Get data source instance (lazy initialization)"""
-        if self._data_source is None:
-            self._data_source = data_source_factory.get_realtime_service()
-        return self._data_source
-    
     def get_realtime_prices(self, db: Session = None) -> List[Dict]:
         """
-        Get real-time prices for all stocks in pool (pure data fetch)
-        If USE_HISTORICAL_AS_REALTIME is True, uses latest historical price from database
+        Get real-time prices for all stocks in pool
+        Reads from cache first, falls back to database (latest historical)
+        Never calls external APIs
         """
         result = []
         
         # Test mode: use historical data as real-time
         if settings.USE_HISTORICAL_AS_REALTIME and db:
             from models.crud.stock_price_crud import get_latest_price_data
-            if not hasattr(self, '_test_mode_logged'):
+            if not self._test_mode_logged:
                 logger.info("TEST MODE: Using historical data as real-time prices (non-market hours testing)")
                 self._test_mode_logged = True
             for ticker in self.stock_pool:
@@ -64,38 +59,45 @@ class StockPriceService:
                         "updated_at": datetime.now()
                     })
         else:
-            # Normal mode: fetch from configured data source
-            # Try WebSocket first if available, fallback to REST API
-            ws_service = self._get_websocket_service()
-            data_source = settings.DATA_SOURCE.lower()
-            if ws_service and ws_service.running:
-                # Try to get from WebSocket cache first
-                ws_prices = ws_service.get_cached_prices_bulk(self.stock_pool)
-                # Count how many tickers have cached prices
-                cached_count = sum(1 for p in ws_prices.values() if p and p.get("close"))
-                # Use WebSocket data if available, otherwise fallback to REST
-                if cached_count > 0:
-                    logger.debug(f"Using WebSocket cached prices for {cached_count}/{len(self.stock_pool)} tickers ({data_source})")
-                    prices = ws_prices
-                else:
-                    logger.debug(f"WebSocket cache empty (0/{len(self.stock_pool)} tickers), fetching from {data_source} REST API")
-                    prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
-            else:
-                logger.debug(f"Fetching real-time prices from {data_source} REST API")
-                prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
+            # Normal mode: read from cache, fallback to database
+            from models.crud.stock_price_crud import get_latest_price_data
+            
+            # Get prices from cache
+            cached_prices = price_cache_service.get_prices_bulk(self.stock_pool)
             
             for ticker in self.stock_pool:
-                price_data = prices.get(ticker)
-                if price_data:
+                cached_data = cached_prices.get(ticker)
+                
+                if cached_data and cached_data.get("price"):
+                    # Use cached price
                     result.append({
                         "ticker": ticker,
-                        "price": price_data.get("close"),
-                        "open": price_data.get("open"),
-                        "high": price_data.get("high"),
-                        "low": price_data.get("low"),
-                        "volume": price_data.get("volume"),
-                        "updated_at": datetime.now()
+                        "price": cached_data.get("price"),
+                        "open": cached_data.get("open"),
+                        "high": cached_data.get("high"),
+                        "low": cached_data.get("low"),
+                        "volume": cached_data.get("volume"),
+                        "updated_at": cached_data.get("updated_at", datetime.now())
                     })
+                elif db:
+                    # Fallback to database (latest historical)
+                    latest = get_latest_price_data(db, ticker)
+                    if latest:
+                        result.append({
+                            "ticker": ticker,
+                            "price": float(latest.close) if latest.close else None,
+                            "open": float(latest.open) if latest.open else None,
+                            "high": float(latest.high) if latest.high else None,
+                            "low": float(latest.low) if latest.low else None,
+                            "volume": latest.volume,
+                            "updated_at": datetime.now()
+                        })
+                    else:
+                        result.append({
+                            "ticker": ticker,
+                            "price": None,
+                            "updated_at": datetime.now()
+                        })
                 else:
                     result.append({
                         "ticker": ticker,
@@ -107,9 +109,9 @@ class StockPriceService:
     
     def get_current_price(self, ticker: str, db: Session = None) -> Optional[float]:
         """
-        Get current price for a single ticker (pure data fetch)
-        If USE_HISTORICAL_AS_REALTIME is True, uses latest historical price from database
-        Otherwise, prioritizes WebSocket real-time data, falls back to REST API
+        Get current price for a single ticker
+        Reads from cache first, falls back to database
+        Never calls external APIs
         """
         # Test mode: use historical data as real-time
         if settings.USE_HISTORICAL_AS_REALTIME and db:
@@ -119,30 +121,25 @@ class StockPriceService:
                 return float(latest.close)
             return None
         else:
-            # Normal mode: fetch from configured data source
-            # Try WebSocket first if available, fallback to REST API
-            ws_service = self._get_websocket_service()
-            data_source = settings.DATA_SOURCE.lower()
-            if ws_service and ws_service.running:
-                ws_price = ws_service.get_cached_price(ticker)
-                if ws_price and ws_price.get("close"):
-                    logger.debug(f"Using WebSocket cached price for {ticker}")
-                    return float(ws_price.get("close"))
-                else:
-                    logger.debug(f"WebSocket cache empty for {ticker}, fetching from REST API")
-                    prices = self._get_data_source().get_latest_prices_bulk([ticker])
-                    price_data = prices.get(ticker)
-                    return price_data.get("close") if price_data else None
-            else:
-                logger.debug(f"Fetching real-time price for {ticker} from {data_source} REST API")
-                prices = self._get_data_source().get_latest_prices_bulk([ticker])
-                price_data = prices.get(ticker)
-                return price_data.get("close") if price_data else None
+            # Normal mode: read from cache, fallback to database
+            cached_data = price_cache_service.get_price(ticker)
+            
+            if cached_data and cached_data.get("price"):
+                return float(cached_data.get("price"))
+            elif db:
+                # Fallback to database
+                from models.crud.stock_price_crud import get_latest_price_data
+                latest = get_latest_price_data(db, ticker)
+                if latest and latest.close:
+                    return float(latest.close)
+            
+            return None
     
     def get_current_prices_bulk(self, tickers: List[str], db: Session = None) -> Dict[str, Optional[float]]:
         """
-        Get current prices for multiple tickers in bulk (optimized for N+1 query prevention)
-        Returns a dict mapping ticker -> price
+        Get current prices for multiple tickers in bulk
+        Reads from cache first, falls back to database
+        Never calls external APIs
         """
         result = {}
         
@@ -153,48 +150,23 @@ class StockPriceService:
                 latest = get_latest_price_data(db, ticker)
                 result[ticker] = float(latest.close) if latest and latest.close else None
         else:
-            # Normal mode: fetch from configured data source (already bulk)
-            # Try WebSocket first if available
-            ws_service = self._get_websocket_service()
-            data_source = settings.DATA_SOURCE.lower()
-            if ws_service and ws_service.running:
-                ws_prices = ws_service.get_cached_prices_bulk(tickers)
-                if any(p is not None for p in ws_prices.values()):
-                    prices = ws_prices
-                    logger.debug(f"Using WebSocket cached prices for bulk real-time data ({data_source})")
-                else:
-                    logger.debug(f"WebSocket cache empty, fetching from {data_source} REST API for bulk prices")
-                    prices = self._get_data_source().get_latest_prices_bulk(tickers)
-            else:
-                logger.debug(f"Fetching bulk real-time prices from {data_source} REST API")
-                prices = self._get_data_source().get_latest_prices_bulk(tickers)
+            # Normal mode: read from cache, fallback to database
+            cached_prices = price_cache_service.get_prices_bulk(tickers)
+            
             for ticker in tickers:
-                price_data = prices.get(ticker)
-                result[ticker] = price_data.get("close") if price_data else None
+                cached_data = cached_prices.get(ticker)
+                if cached_data and cached_data.get("price"):
+                    result[ticker] = float(cached_data.get("price"))
+                elif db:
+                    # Fallback to database
+                    from models.crud.stock_price_crud import get_latest_price_data
+                    latest = get_latest_price_data(db, ticker)
+                    result[ticker] = float(latest.close) if latest and latest.close else None
+                else:
+                    result[ticker] = None
         
         return result
-    
-    def _get_websocket_service(self):
-        """Get WebSocket service instance (lazy initialization)
-        Only supports Alpaca WebSocket. Polygon WebSocket is no longer used.
-        """
-        if not self._websocket_initialized:
-            try:
-                data_source = settings.DATA_SOURCE.lower()
-                if data_source == "alpaca":
-                    from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
-                    self._websocket_service = get_alpaca_websocket_service()
-                else:
-                    # No WebSocket for non-Alpaca data sources
-                    self._websocket_service = None
-                self._websocket_initialized = True
-            except Exception as e:
-                logger.debug(f"WebSocket service not available: {e}")
-                self._websocket_service = None
-                self._websocket_initialized = True
-        return self._websocket_service
 
 
 # Singleton instance
 stock_price_service = StockPriceService()
-

@@ -1,20 +1,21 @@
 # backend/services/datasource/__init__.py
 
 # Data source services
-# Note: Real-time data uses Alpaca (WebSocket or REST), historical data uses Polygon REST
-# Polygon WebSocket is kept for reference but not actively used
+# Note: Real-time data uses Alpaca REST API (cached), historical data uses Polygon REST
+# WebSocket services are disabled for stability
 from services.datasource.stock_price_service import stock_price_service
 from services.datasource.refresh_historical_data_service import refresh_historical_data_service
 from services.datasource.polygon_service import polygon_service
 from services.datasource.data_source_factory import data_source_factory
-
-# Polygon WebSocket is kept for reference but not used in active code paths
-# from services.datasource.polygon_websocket_service import polygon_websocket_service
+from services.datasource.price_cache_service import price_cache_service
+from services.datasource.alpaca_realtime_updater import alpaca_realtime_updater
 
 __all__ = [
     "stock_price_service", 
     "refresh_historical_data_service",
     "polygon_service",
-    "data_source_factory"
+    "data_source_factory",
+    "price_cache_service",
+    "alpaca_realtime_updater"
 ]
 
