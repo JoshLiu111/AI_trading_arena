@@ -16,7 +16,7 @@ services:
       - key: DEFAULT_BALANCE
         value: 1000000.00
       - key: TRADING_INTERVAL_MINUTES
-        value: 1
+        value: 30
       - key: HISTORY_DAYS
         value: 7
       - key: USE_HISTORICAL_AS_REALTIME

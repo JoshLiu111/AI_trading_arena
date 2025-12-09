@@ -47,23 +47,23 @@ const StockList = ({ competitionStatus, onStocksUpdate }) => {
     fetchStocks();
   }, []);
 
-  // Auto-refresh stock prices every 5 minutes when competition is running
-  useEffect(() => {
-    if (!competitionStatus?.is_running) {
-      return; // Don't refresh if competition is not running
-    }
-
-    const refreshInterval = setInterval(async () => {
-      try {
-        const stocksData = await getStockPrices();
-        setStocks(stocksData);
-        if (onStocksUpdateRef.current) {
-          onStocksUpdateRef.current(stocksData);
-        }
-      } catch (err) {
-        console.error("Error auto-refreshing stocks:", err);
-      }
-    }, 300000); // 5 minutes (300000 ms)
+         // Auto-refresh stock prices every 30 minutes when competition is running (same as AI trading frequency)
+         useEffect(() => {
+           if (!competitionStatus?.is_running) {
+             return; // Don't refresh if competition is not running
+           }
+       
+           const refreshInterval = setInterval(async () => {
+             try {
+               const stocksData = await getStockPrices();
+               setStocks(stocksData);
+               if (onStocksUpdateRef.current) {
+                 onStocksUpdateRef.current(stocksData);
+               }
+             } catch (err) {
+               console.error("Error auto-refreshing stocks:", err);
+             }
+           }, 1800000); // 30 minutes (1800000 ms) - same as AI trading frequency
 
     // Cleanup interval on unmount or when competition stops
     return () => clearInterval(refreshInterval);
