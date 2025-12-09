@@ -27,8 +27,13 @@ class AlphaVantageService(BaseDataSource):
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.ALPHA_VANTAGE_API_KEY
-        if not self.api_key:
-            logger.warning("Alpha Vantage API key not configured")
+        # Debug: Log API key status (without exposing the key)
+        if self.api_key:
+            logger.info(f"Alpha Vantage API key configured (length: {len(self.api_key)})")
+        else:
+            logger.error("Alpha Vantage API key not configured! Check ALPHA_VANTAGE_API_KEY environment variable.")
+            logger.error(f"Current DATA_SOURCE setting: {settings.DATA_SOURCE}")
+            logger.error(f"ALPHA_VANTAGE_API_KEY from settings: {'SET' if settings.ALPHA_VANTAGE_API_KEY else 'NOT SET'}")
     
     def _make_request(self, function: str, symbol: str, **params) -> Dict:
         """Make a request to Alpha Vantage API with rate limiting"""

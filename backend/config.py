@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        # Ensure environment variables are read (case-sensitive matching)
+        case_sensitive = False
+        # Allow reading from environment variables
+        env_file_encoding = 'utf-8'
 
 
 settings = Settings()

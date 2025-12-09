@@ -39,7 +39,12 @@ def is_allowed_origin(origin: str) -> bool:
             return True
     
     # Allow all Vercel preview deployments (*.vercel.app)
+    # Support both joshlius-projects.vercel.app and other Vercel domains
     if origin.startswith("https://") and ".vercel.app" in origin:
+        return True
+    
+    # Also allow if it contains vercel.app anywhere (for preview deployments)
+    if "vercel.app" in origin.lower():
         return True
     
     return False
@@ -54,6 +59,13 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin")
         
+        # Debug logging
+        from core.logging import get_logger
+        logger = get_logger(__name__)
+        if origin:
+            logger.debug(f"CORS request from origin: {origin}")
+            logger.debug(f"Is allowed: {is_allowed_origin(origin)}")
+        
         # Handle preflight requests
         if request.method == "OPTIONS":
             response = Response()
@@ -62,6 +74,10 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
                 response.headers["Access-Control-Allow-Headers"] = "*"
                 response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Max-Age"] = "86400"  # 24 hours
+                logger.debug(f"CORS preflight allowed for {origin}")
+            else:
+                logger.warning(f"CORS preflight denied for origin: {origin}")
             return response
         
         # Handle actual requests
@@ -72,6 +88,9 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
             response.headers["Access-Control-Allow-Credentials"] = "true"
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
             response.headers["Access-Control-Allow-Headers"] = "*"
+            logger.debug(f"CORS headers added for {origin}")
+        else:
+            logger.warning(f"CORS headers not added for origin: {origin}")
         
         return response
 

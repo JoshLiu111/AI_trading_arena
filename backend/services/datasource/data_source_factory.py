@@ -22,6 +22,12 @@ class DataSourceFactory:
     def get_history_service() -> BaseDataSource:
         """Get historical data service based on configuration"""
         if settings.DATA_SOURCE == "alpha_vantage":
+            # Check if API key is configured
+            api_key = settings.ALPHA_VANTAGE_API_KEY
+            if not api_key or api_key.strip() == "":
+                logger.error("Alpha Vantage API key not configured! Please set ALPHA_VANTAGE_API_KEY environment variable.")
+                logger.error("Cannot proceed without API key. Please configure it in Render dashboard.")
+                raise ValueError("Alpha Vantage API key is required but not configured. Please set ALPHA_VANTAGE_API_KEY environment variable.")
             logger.info("Using Alpha Vantage for historical data")
             return AlphaVantageService()
         else:
@@ -32,6 +38,12 @@ class DataSourceFactory:
     def get_info_service() -> BaseDataSource:
         """Get company info service based on configuration"""
         if settings.DATA_SOURCE == "alpha_vantage":
+            # Check if API key is configured
+            api_key = settings.ALPHA_VANTAGE_API_KEY
+            if not api_key or api_key.strip() == "":
+                logger.error("Alpha Vantage API key not configured! Please set ALPHA_VANTAGE_API_KEY environment variable.")
+                logger.error("Cannot proceed without API key. Please configure it in Render dashboard.")
+                raise ValueError("Alpha Vantage API key is required but not configured. Please set ALPHA_VANTAGE_API_KEY environment variable.")
             logger.info("Using Alpha Vantage for company info")
             return AlphaVantageService()
         else:
@@ -42,6 +54,12 @@ class DataSourceFactory:
     def get_realtime_service() -> BaseDataSource:
         """Get real-time price service based on configuration"""
         if settings.DATA_SOURCE == "alpha_vantage":
+            # Check if API key is configured
+            api_key = settings.ALPHA_VANTAGE_API_KEY
+            if not api_key or api_key.strip() == "":
+                logger.error("Alpha Vantage API key not configured! Please set ALPHA_VANTAGE_API_KEY environment variable.")
+                logger.error("Cannot proceed without API key. Please configure it in Render dashboard.")
+                raise ValueError("Alpha Vantage API key is required but not configured. Please set ALPHA_VANTAGE_API_KEY environment variable.")
             logger.info("Using Alpha Vantage for real-time prices")
             return AlphaVantageService()
         else:

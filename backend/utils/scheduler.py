@@ -92,6 +92,23 @@ async def lifespan(app):
     init_db()
     logger.info("Stock Trading Arena API started")
     
+    # Debug: Log configuration status
+    logger.info(f"DATA_SOURCE: {settings.DATA_SOURCE}")
+    if settings.DATA_SOURCE == "alpha_vantage":
+        api_key = settings.ALPHA_VANTAGE_API_KEY
+        if api_key and api_key.strip():
+            logger.info(f"ALPHA_VANTAGE_API_KEY: Configured (length: {len(api_key)})")
+        else:
+            logger.error("ALPHA_VANTAGE_API_KEY: NOT CONFIGURED!")
+            logger.error("Please set ALPHA_VANTAGE_API_KEY environment variable in Render dashboard")
+            # Try to read from os.environ directly as a fallback check
+            import os
+            env_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+            if env_key:
+                logger.warning(f"Found ALPHA_VANTAGE_API_KEY in os.environ (length: {len(env_key)}), but settings didn't pick it up")
+            else:
+                logger.error("ALPHA_VANTAGE_API_KEY not found in os.environ either")
+    
     # Start trading scheduler
     await scheduler.start()
     yield
