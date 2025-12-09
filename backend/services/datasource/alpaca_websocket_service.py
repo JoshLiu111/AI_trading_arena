@@ -43,6 +43,7 @@ class AlpacaWebSocketService:
         self.running = False
         self.task = None
         self.subscribed_tickers: Set[str] = set()
+        self.connection_limit_reached = False  # Flag to prevent reconnection attempts
         
         # Initialize Alpaca Stream
         # Use 'iex' data feed (free tier) or 'sip' (premium)
@@ -119,6 +120,12 @@ class AlpacaWebSocketService:
     
     async def start(self, tickers: list):
         """Start WebSocket connection and subscribe to tickers"""
+        # Don't start if connection limit was previously reached
+        if self.connection_limit_reached:
+            logger.warning("Alpaca WebSocket connection limit previously reached. Skipping WebSocket startup.")
+            logger.info("Will use REST API for real-time prices (WebSocket disabled)")
+            return
+        
         if self.running:
             logger.warning("Alpaca WebSocket service already running")
             return
@@ -150,10 +157,13 @@ class AlpacaWebSocketService:
                     self.stream.run()
                 except ValueError as e:
                     error_msg = str(e).lower()
-                    if "connection limit exceeded" in error_msg:
-                        logger.error("Alpaca WebSocket connection limit exceeded. Stopping WebSocket service immediately.")
-                        logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
+                    if "connection limit exceeded" in error_msg or "connection limit" in error_msg:
+                        logger.error("Alpaca WebSocket connection limit exceeded. Permanently disabling WebSocket service.")
+                        logger.warning("Will use REST API for real-time prices (WebSocket disabled)")
+                        self.connection_limit_reached = True
                         self.running = False
+                        # Stop the stream to prevent library from retrying
+                        asyncio.run_coroutine_threadsafe(self.stop(), asyncio.get_event_loop())
                         return  # Stop immediately, don't retry
                     else:
                         logger.error(f"Alpaca WebSocket error: {e}")
@@ -162,10 +172,13 @@ class AlpacaWebSocketService:
                         return
                 except Exception as e:
                     error_msg = str(e).lower()
-                    if "connection limit" in error_msg or "429" in error_msg:
-                        logger.error("Alpaca WebSocket connection limit exceeded. Stopping WebSocket service immediately.")
-                        logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
+                    if "connection limit" in error_msg or "429" in error_msg or "connection limit exceeded" in error_msg:
+                        logger.error("Alpaca WebSocket connection limit exceeded. Permanently disabling WebSocket service.")
+                        logger.warning("Will use REST API for real-time prices (WebSocket disabled)")
+                        self.connection_limit_reached = True
                         self.running = False
+                        # Stop the stream to prevent library from retrying
+                        asyncio.run_coroutine_threadsafe(self.stop(), asyncio.get_event_loop())
                         return
                     logger.exception(f"Error in Alpaca stream thread: {e}")
                     logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
@@ -198,15 +211,23 @@ class AlpacaWebSocketService:
         if self.stream:
             try:
                 # Alpaca stream doesn't have a direct stop method, but we can unsubscribe
+                # and set the stream to None to prevent further operations
                 for ticker in list(self.subscribed_tickers):
                     try:
                         self.stream.unsubscribe_trades(ticker)
                     except Exception as e:
-                        logger.warning(f"Error unsubscribing from {ticker}: {e}")
+                        logger.debug(f"Error unsubscribing from {ticker}: {e}")
                 self.subscribed_tickers.clear()
+                
+                # Try to close the underlying connection if possible
+                # The Stream object doesn't expose a close method, but setting it to None
+                # will prevent further operations
+                self.stream = None
                 logger.info("Alpaca WebSocket connection closed")
             except Exception as e:
                 logger.warning(f"Error closing Alpaca WebSocket: {e}")
+                # Even if there's an error, set stream to None to prevent retries
+                self.stream = None
     
     def get_cached_price(self, ticker: str) -> Optional[Dict]:
         """Get cached price for a ticker"""
