@@ -177,7 +177,9 @@ class StockPriceService:
         return result
     
     def _get_websocket_service(self):
-        """Get WebSocket service instance (lazy initialization)"""
+        """Get WebSocket service instance (lazy initialization)
+        Only supports Alpaca WebSocket. Polygon WebSocket is no longer used.
+        """
         if not self._websocket_initialized:
             try:
                 data_source = settings.DATA_SOURCE.lower()
@@ -185,9 +187,8 @@ class StockPriceService:
                     from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
                     self._websocket_service = get_alpaca_websocket_service()
                 else:
-                    # Default to Polygon
-                    from services.datasource.polygon_websocket_service import polygon_websocket_service
-                    self._websocket_service = polygon_websocket_service
+                    # No WebSocket for non-Alpaca data sources
+                    self._websocket_service = None
                 self._websocket_initialized = True
             except Exception as e:
                 logger.debug(f"WebSocket service not available: {e}")

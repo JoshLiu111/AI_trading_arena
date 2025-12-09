@@ -149,17 +149,28 @@ class AlpacaWebSocketService:
                 try:
                     self.stream.run()
                 except ValueError as e:
-                    error_msg = str(e)
-                    if "connection limit exceeded" in error_msg.lower():
-                        logger.error("Alpaca WebSocket connection limit exceeded. Stopping WebSocket service.")
+                    error_msg = str(e).lower()
+                    if "connection limit exceeded" in error_msg:
+                        logger.error("Alpaca WebSocket connection limit exceeded. Stopping WebSocket service immediately.")
                         logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
                         self.running = False
+                        return  # Stop immediately, don't retry
                     else:
-                        logger.exception(f"Error in Alpaca stream thread: {e}")
+                        logger.error(f"Alpaca WebSocket error: {e}")
+                        logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
                         self.running = False
+                        return
                 except Exception as e:
+                    error_msg = str(e).lower()
+                    if "connection limit" in error_msg or "429" in error_msg:
+                        logger.error("Alpaca WebSocket connection limit exceeded. Stopping WebSocket service immediately.")
+                        logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
+                        self.running = False
+                        return
                     logger.exception(f"Error in Alpaca stream thread: {e}")
+                    logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
                     self.running = False
+                    return
             
             stream_thread = threading.Thread(target=run_stream, daemon=True)
             stream_thread.start()
@@ -170,6 +181,7 @@ class AlpacaWebSocketService:
                 await asyncio.sleep(1)
         except Exception as e:
             logger.exception(f"Error running Alpaca stream: {e}")
+            logger.warning("Will use REST API for real-time prices (WebSocket unavailable)")
             self.running = False
     
     async def stop(self):

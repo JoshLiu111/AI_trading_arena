@@ -189,7 +189,9 @@ async def lifespan(app):
     # Start trading scheduler
     await scheduler.start()
     
-    # Start WebSocket service based on configured data source (optional - will fallback to REST API if fails)
+    # Start WebSocket service for Alpaca (optional - will fallback to REST API if fails)
+    # Note: Real-time data uses Alpaca, historical data uses Polygon
+    # Polygon WebSocket is no longer used
     try:
         if data_source == "alpaca":
             from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
@@ -198,14 +200,11 @@ async def lifespan(app):
                 await alpaca_ws.start(settings.STOCK_POOL)
                 logger.info("Alpaca WebSocket service started")
             else:
-                logger.warning("Alpaca WebSocket service not available")
+                logger.warning("Alpaca WebSocket service not available, will use REST API")
         else:
-            # Default to Polygon
-            from services.datasource.polygon_websocket_service import polygon_websocket_service
-            await polygon_websocket_service.start(settings.STOCK_POOL)
-            logger.info("Polygon WebSocket service started")
+            logger.info("DATA_SOURCE is not 'alpaca', skipping WebSocket (will use REST API)")
     except Exception as e:
-        logger.warning(f"Failed to start WebSocket service ({data_source}): {e}")
+        logger.warning(f"Failed to start Alpaca WebSocket service: {e}")
         logger.info("Will use REST API for real-time prices (WebSocket unavailable)")
     
     yield
@@ -220,9 +219,6 @@ async def lifespan(app):
             alpaca_ws = get_alpaca_websocket_service()
             if alpaca_ws:
                 await alpaca_ws.stop()
-        else:
-            # Default to Polygon
-            from services.datasource.polygon_websocket_service import polygon_websocket_service
-            await polygon_websocket_service.stop()
+                logger.info("Alpaca WebSocket service stopped")
     except Exception as e:
-        logger.warning(f"Failed to stop WebSocket service ({data_source}): {e}")
+        logger.warning(f"Failed to stop Alpaca WebSocket service: {e}")
