@@ -86,31 +86,80 @@ class YahooService:
         """
         from core.logging import get_logger
         import time
+        import json
+        from requests.exceptions import HTTPError
         
         logger = get_logger(__name__)
         result = {ticker: [] for ticker in tickers}
         
-        try:
-            # Use yfinance batch download - one API call for all tickers
-            if start and end:
-                df = yf.download(tickers, start=start, end=end, progress=False, threads=True, auto_adjust=False)
-            else:
-                df = yf.download(tickers, period=period, progress=False, threads=True, auto_adjust=False)
-            
-            if df.empty:
-                logger.warning("Bulk download returned empty DataFrame, falling back to individual requests")
-                # Fallback to individual requests if bulk download fails
-                for i, ticker in enumerate(tickers):
-                    if i > 0:
-                        time.sleep(3)  # Wait 3 seconds between requests
-                    result[ticker] = self.get_historical_data(ticker, period, start, end)
-                return result
-            
-            # Process bulk download results
-            # yfinance returns multi-level columns: (PriceType, Ticker) for multiple tickers
-            # or single-level columns for single ticker
-            
-            for ticker in tickers:
+        # Try bulk download with retries
+        max_bulk_retries = 3
+        for bulk_attempt in range(max_bulk_retries):
+            try:
+                # Use yfinance batch download - one API call for all tickers
+                if start and end:
+                    df = yf.download(tickers, start=start, end=end, progress=False, threads=True, auto_adjust=False)
+                else:
+                    df = yf.download(tickers, period=period, progress=False, threads=True, auto_adjust=False)
+                
+                if not df.empty:
+                    # Success - process the data
+                    break
+                else:
+                    # Empty DataFrame - might be rate limited
+                    if bulk_attempt < max_bulk_retries - 1:
+                        wait_time = 10 * (2 ** bulk_attempt)  # 10s, 20s, 40s
+                        logger.warning(f"Bulk download returned empty DataFrame (attempt {bulk_attempt + 1}/{max_bulk_retries}), retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.warning("Bulk download returned empty DataFrame after all retries, falling back to individual requests")
+                        # Fallback to individual requests if bulk download fails
+                        time.sleep(5)  # Wait before starting individual requests
+                        for i, ticker in enumerate(tickers):
+                            if i > 0:
+                                time.sleep(5)  # Wait 5 seconds between requests
+                            result[ticker] = self.get_historical_data(ticker, period, start, end)
+                        return result
+            except (HTTPError, json.JSONDecodeError, ValueError) as e:
+                error_str = str(e).lower()
+                is_rate_limit = "429" in error_str or "too many requests" in error_str or "rate limit" in error_str
+                
+                if bulk_attempt < max_bulk_retries - 1:
+                    wait_time = 10 * (2 ** bulk_attempt)  # 10s, 20s, 40s
+                    logger.warning(f"Bulk download failed (attempt {bulk_attempt + 1}/{max_bulk_retries}): {str(e)[:100]}, retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.warning(f"Bulk download failed after all retries: {e}, falling back to individual requests")
+                    # Fallback to individual requests if bulk download fails completely
+                    time.sleep(5)  # Wait before starting individual requests
+                    for i, ticker in enumerate(tickers):
+                        if i > 0:
+                            time.sleep(5)  # Wait 5 seconds between requests
+                        result[ticker] = self.get_historical_data(ticker, period, start, end)
+                    return result
+            except Exception as e:
+                if bulk_attempt < max_bulk_retries - 1:
+                    wait_time = 10 * (2 ** bulk_attempt)
+                    logger.warning(f"Bulk download error (attempt {bulk_attempt + 1}/{max_bulk_retries}): {str(e)[:100]}, retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.warning(f"Bulk download failed after all retries: {e}, falling back to individual requests")
+                    time.sleep(5)
+                    for i, ticker in enumerate(tickers):
+                        if i > 0:
+                            time.sleep(5)
+                        result[ticker] = self.get_historical_data(ticker, period, start, end)
+                    return result
+        
+        # If we get here, bulk download succeeded - process the data
+        # Process bulk download results
+        # yfinance returns multi-level columns: (PriceType, Ticker) for multiple tickers
+        # or single-level columns for single ticker
+        
+        for ticker in tickers:
                 try:
                     if len(tickers) == 1:
                         # Single ticker: columns are just 'Open', 'High', etc.
@@ -151,16 +200,7 @@ class YahooService:
                     # Fallback to individual request if processing fails
                     result[ticker] = self.get_historical_data(ticker, period, start, end)
             
-            return result
-            
-        except Exception as e:
-            logger.warning(f"Bulk download failed: {e}, falling back to individual requests")
-            # Fallback to individual requests if bulk download fails completely
-            for i, ticker in enumerate(tickers):
-                if i > 0:
-                    time.sleep(3)  # Wait 3 seconds between requests
-                result[ticker] = self.get_historical_data(ticker, period, start, end)
-            return result
+        return result
 
     def get_latest_prices_bulk(self, tickers: List[str]) -> Dict[str, Optional[Dict]]:
         """
