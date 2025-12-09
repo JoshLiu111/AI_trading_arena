@@ -1,10 +1,10 @@
 # Stock Trading Arena - Dependencies
 
 # FastAPI
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
+fastapi>=0.115.0  # Updated for Python 3.13 compatibility
+uvicorn[standard]>=0.32.0  # Updated for Python 3.13 compatibility
+pydantic>=2.10.0  # Updated for Python 3.13 compatibility (uses pre-built pydantic-core)
+pydantic-settings>=2.6.0  # Updated for Python 3.13 compatibility
 gunicorn==21.2.0  # Production WSGI server
 
 # Database
