@@ -148,11 +148,12 @@ def get_realtime_prices(
         
         # Build enriched stock data
         # Use ticker as name if stock info is not available yet
+        current_price = price_data.get("price")
         enriched_stock = {
             "ticker": ticker,
             "name": stock.name if stock else ticker,
-            "price": price_data.get("price"),  # Keep for backward compatibility
-            "current_price": price_data.get("price"),  # Add explicit current_price field
+            "price": current_price,  # Keep for backward compatibility
+            "current_price": current_price,  # Add explicit current_price field
             "previous_close": previous_close,
             "open": price_data.get("open"),
             "high": price_data.get("high"),
@@ -160,6 +161,10 @@ def get_realtime_prices(
             "volume": price_data.get("volume"),
             "updated_at": updated_at,
         }
+        
+        # Log if price is missing for debugging
+        if current_price is None:
+            logger.warning(f"Ticker {ticker}: current_price is None. price_data keys: {list(price_data.keys()) if price_data else 'None'}")
         
         # Add company info - return all fields, let frontend decide what to display
         if stock:
