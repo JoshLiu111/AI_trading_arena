@@ -25,6 +25,8 @@ class StockPriceService:
     def __init__(self):
         self.data_source = data_source_factory.get_realtime_service()
         self.stock_pool = settings.STOCK_POOL
+        self._websocket_service = None
+        self._websocket_initialized = False
     
     def get_realtime_prices(self, db: Session = None) -> List[Dict]:
         """
@@ -59,7 +61,17 @@ class StockPriceService:
                     })
         else:
             # Normal mode: fetch from configured data source
-            prices = self.data_source.get_latest_prices_bulk(self.stock_pool)
+            # Try WebSocket first if using Polygon, fallback to REST API
+            if settings.DATA_SOURCE == "polygon" and self._get_websocket_service():
+                # Try to get from WebSocket cache first
+                ws_prices = self._get_websocket_service().get_cached_prices_bulk(self.stock_pool)
+                # Use WebSocket data if available, otherwise fallback to REST
+                if any(ws_prices.values()):
+                    prices = ws_prices
+                else:
+                    prices = self.data_source.get_latest_prices_bulk(self.stock_pool)
+            else:
+                prices = self.data_source.get_latest_prices_bulk(self.stock_pool)
             
             for ticker in self.stock_pool:
                 price_data = prices.get(ticker)
@@ -115,12 +127,33 @@ class StockPriceService:
                 result[ticker] = float(latest.close) if latest and latest.close else None
         else:
             # Normal mode: fetch from configured data source (already bulk)
-            prices = self.data_source.get_latest_prices_bulk(tickers)
+            # Try WebSocket first if using Polygon, fallback to REST API
+            if settings.DATA_SOURCE == "polygon" and self._get_websocket_service():
+                ws_prices = self._get_websocket_service().get_cached_prices_bulk(tickers)
+                if any(ws_prices.values()):
+                    prices = ws_prices
+                else:
+                    prices = self.data_source.get_latest_prices_bulk(tickers)
+            else:
+                prices = self.data_source.get_latest_prices_bulk(tickers)
             for ticker in tickers:
                 price_data = prices.get(ticker)
                 result[ticker] = price_data.get("close") if price_data else None
         
         return result
+    
+    def _get_websocket_service(self):
+        """Get WebSocket service instance (lazy initialization)"""
+        if not self._websocket_initialized:
+            try:
+                from services.datasource.polygon_websocket_service import polygon_websocket_service
+                self._websocket_service = polygon_websocket_service
+                self._websocket_initialized = True
+            except Exception as e:
+                logger.debug(f"WebSocket service not available: {e}")
+                self._websocket_service = None
+                self._websocket_initialized = True
+        return self._websocket_service
 
 
 # Singleton instance

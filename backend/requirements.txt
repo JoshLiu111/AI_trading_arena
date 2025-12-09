@@ -13,10 +13,11 @@ psycopg[binary]>=3.2.0  # psycopg3 - Updated for Python 3.13 compatibility
 
 # HTTP client (for AI API and data sources)
 httpx==0.26.0
-requests>=2.31.0  # For Alpha Vantage API
+requests>=2.31.0  # For Polygon.io API
+websockets>=12.0  # For Polygon.io WebSocket support
 
 # Stock data
-pandas>=2.2.0  # For data processing (no longer using yfinance)  
+pandas>=2.2.0  # For data processing  
 
 # Utilities
 python-dotenv==1.0.0

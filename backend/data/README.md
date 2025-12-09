@@ -63,14 +63,17 @@ MSFT,2024-12-02,382.0,383.0,381.0,382.5,1900000,382.5
 
 ### Option 1: Use the Import Script
 
-You can fetch data locally and save it:
+You can fetch data from Polygon.io API and save it locally:
 
 ```python
 # scripts/fetch_and_save_data.py (create this)
-import yfinance as yf
-import pandas as pd
-from datetime import date, timedelta
+import requests
 import json
+from datetime import date, timedelta
+import os
+
+POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
+BASE_URL = "https://api.polygon.io"
 
 tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "JPM", "V", "WMT"]
 end_date = date.today()
@@ -78,20 +81,25 @@ start_date = end_date - timedelta(days=14)
 
 data = {}
 for ticker in tickers:
-    stock = yf.Ticker(ticker)
-    df = stock.history(start=start_date.isoformat(), end=end_date.isoformat())
+    endpoint = f"{BASE_URL}/v2/aggs/ticker/{ticker}/range/1/day/{start_date.isoformat()}/{end_date.isoformat()}"
+    response = requests.get(endpoint, params={"apikey": POLYGON_API_KEY})
+    response.raise_for_status()
+    result = response.json()
     
-    data[ticker] = []
-    for index, row in df.iterrows():
-        data[ticker].append({
-            "date": index.date().isoformat(),
-            "open": float(row["Open"]),
-            "high": float(row["High"]),
-            "low": float(row["Low"]),
-            "close": float(row["Close"]),
-            "volume": int(row["Volume"]),
-            "adj_close": float(row["Close"])
-        })
+    if "results" in result:
+        data[ticker] = []
+        for item in result["results"]:
+            timestamp_ms = item.get("t", 0)
+            price_date = datetime.fromtimestamp(timestamp_ms / 1000).date()
+            data[ticker].append({
+                "date": price_date.isoformat(),
+                "open": float(item.get("o", 0)),
+                "high": float(item.get("h", 0)),
+                "low": float(item.get("l", 0)),
+                "close": float(item.get("c", 0)),
+                "volume": int(item.get("v", 0)),
+                "adj_close": float(item.get("c", 0))
+            })
 
 # Save as JSON
 with open("data/stock_data.json", "w") as f:
@@ -116,12 +124,11 @@ with open("data/stock_data.csv", "w", newline="") as f:
             })
 ```
 
-### Option 2: Download from Yahoo Finance Manually
+### Option 2: Download from Polygon.io Manually
 
-1. Go to Yahoo Finance
-2. Download historical data for each stock
-3. Convert to the required format
-4. Save as `stock_data.csv` or `stock_data.json` in this directory
+1. Use Polygon.io API or dashboard to download historical data
+2. Convert to the required format
+3. Save as `stock_data.csv` or `stock_data.json` in this directory
 
 ## Automatic Import
 
@@ -129,7 +136,7 @@ When you start a competition for the first time (when database is empty), the sy
 
 1. Check if `data/stock_data.csv` or `data/stock_data.json` exists
 2. If found, import the data automatically
-3. If not found, fetch data from Yahoo Finance API (may be slow due to rate limits)
+3. If not found, fetch data from Polygon.io API
 
 ## Manual Import
 

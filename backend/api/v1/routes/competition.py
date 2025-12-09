@@ -25,7 +25,7 @@ async def start_competition(db: Session = Depends(get_db)):
     Start a new competition (full reset):
     - Reset all accounts to initial balance
     - Clear all transactions
-    - Refresh 7-day stock data from yfinance
+    - Refresh 7-day stock data from Polygon.io
     - Generate AI trading strategies
     - Set is_running = True
     """

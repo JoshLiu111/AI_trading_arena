@@ -94,23 +94,32 @@ async def lifespan(app):
     
     # Debug: Log configuration status
     logger.info(f"DATA_SOURCE: {settings.DATA_SOURCE}")
-    if settings.DATA_SOURCE == "alpha_vantage":
-        api_key = settings.ALPHA_VANTAGE_API_KEY
-        if api_key and api_key.strip():
-            logger.info(f"ALPHA_VANTAGE_API_KEY: Configured (length: {len(api_key)})")
-        else:
-            logger.error("ALPHA_VANTAGE_API_KEY: NOT CONFIGURED!")
-            logger.error("Please set ALPHA_VANTAGE_API_KEY environment variable in Render dashboard")
-            # Try to read from os.environ directly as a fallback check
-            import os
-            env_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
-            if env_key:
-                logger.warning(f"Found ALPHA_VANTAGE_API_KEY in os.environ (length: {len(env_key)}), but settings didn't pick it up")
-            else:
-                logger.error("ALPHA_VANTAGE_API_KEY not found in os.environ either")
+    api_key = settings.POLYGON_API_KEY
+    if api_key and api_key.strip():
+        logger.info(f"POLYGON_API_KEY: Configured (length: {len(api_key)})")
+    else:
+        logger.error("POLYGON_API_KEY: NOT CONFIGURED!")
+        logger.error("Please set POLYGON_API_KEY environment variable in Render dashboard")
     
     # Start trading scheduler
     await scheduler.start()
+    
+    # Start Polygon WebSocket
+    try:
+        from services.datasource.polygon_websocket_service import polygon_websocket_service
+        await polygon_websocket_service.start(settings.STOCK_POOL)
+        logger.info("Polygon WebSocket service started")
+    except Exception as e:
+        logger.warning(f"Failed to start Polygon WebSocket: {e}")
+    
     yield
+    
     # Stop trading scheduler on shutdown
     await scheduler.stop()
+    
+    # Stop Polygon WebSocket on shutdown
+    try:
+        from services.datasource.polygon_websocket_service import polygon_websocket_service
+        await polygon_websocket_service.stop()
+    except Exception as e:
+        logger.warning(f"Failed to stop Polygon WebSocket: {e}")

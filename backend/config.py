@@ -12,11 +12,11 @@ class Settings(BaseSettings):
     
     # API Keys
     OPENAI_API_KEY: str = ""
-    ALPHA_VANTAGE_API_KEY: str = ""
+    POLYGON_API_KEY: str = ""
     
     # Data Source Configuration
-    # Note: Only Alpha Vantage is supported now (yfinance has been removed)
-    DATA_SOURCE: str = "alpha_vantage"  # Only "alpha_vantage" is supported
+    # Only Polygon.io is supported
+    DATA_SOURCE: str = "polygon"  # Polygon.io
     
     # Competition Settings
     DEFAULT_BALANCE: float = 1000000.00

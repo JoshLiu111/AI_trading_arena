@@ -18,11 +18,10 @@ stock-arena-backend/
 ├── services/                  # Business logic layer
 │   ├── datasource/            # Data source services
 │   │   ├── base_data_source.py              # Abstract data source interface
-│   │   ├── data_source_factory.py          # Data source factory (Yahoo/Alpha Vantage)
-│   │   ├── yahoo_history_price_service.py   # Yahoo Finance historical data
-│   │   ├── yahoo_realtime_price_service.py  # Real-time prices
-│   │   ├── yahoo_info_service.py            # Company information
-│   │   ├── alpha_vantage_service.py         # Alpha Vantage data source
+│   │   ├── data_source_factory.py          # Data source factory (Polygon.io)
+│   │   ├── stock_price_service.py          # Stock price service (uses Polygon.io)
+│   │   ├── polygon_service.py              # Polygon.io REST API data source
+│   │   ├── polygon_websocket_service.py    # Polygon.io WebSocket for real-time data
 │   │   └── refresh_historical_data_service.py  # Refresh and save historical data
 │   └── competition/           # Competition-related services
 │       ├── ai_strategy_report_service.py  # GPT strategy generation
@@ -100,7 +99,7 @@ stock-arena-backend/
 │                                                             │
 │  CompetitionManageService (Core Orchestrator)               │
 │       │                                                     │
-│       ├──► StockPriceService ────► yfinance (real-time prices)│  
+│       ├──► StockPriceService ────► Polygon.io (real-time prices)│  
 │       ├──► RefreshHistoricalDataService ──► Refresh & save data│
 │       ├──► GenerateMetricsService ──► Calculate 7-day metrics│
 │       ├──► AIStrategyReportService ──► OpenAI (generate strategies)│
@@ -129,7 +128,7 @@ stock-arena-backend/
 
 2️⃣ Refresh Stock Prices
    RefreshHistoricalDataService 
-     → YahooService.download_bulk(10 stocks, 7 days)
+     → DataSource.download_bulk(10 stocks, 7 days)  # Uses Polygon.io data source
      → StockPriceCRUD.create_price_data
 
 3️⃣ Calculate Metrics
@@ -167,7 +166,7 @@ CompetitionManageService.execute_ai_trades()
                     │
                     TradingService.execute_trade()
                         │
-                        ├── StockPriceService.get_current_price() → yfinance
+                        ├── StockPriceService.get_current_price() → Polygon.io
                         ├── Validate balance/positions
                         ├── AccountCRUD.update_account() (update balance)
                         └── TransactionCRUD.create_transaction()
@@ -254,8 +253,8 @@ The application uses environment variables for configuration. Create a `.env` fi
 | `TRADING_INTERVAL_MINUTES` | Auto-trading interval in minutes | `10` | No |
 | `HISTORY_DAYS` | Historical data days to fetch | `7` | No |
 | `USE_HISTORICAL_AS_REALTIME` | Use historical data as real-time (for testing) | `false` | No |
-| `DATA_SOURCE` | Data source provider: "yahoo" or "alpha_vantage" | `"alpha_vantage"` | No |
-| `ALPHA_VANTAGE_API_KEY` | Alpha Vantage API key (required if using Alpha Vantage) | `""` | Yes (if using Alpha Vantage) |
+| `DATA_SOURCE` | Data source provider (only "polygon" supported) | `"polygon"` | No |
+| `POLYGON_API_KEY` | Polygon.io API key (required) | `""` | Yes |
 
 **Example `.env` file:**
 ```bash
@@ -265,8 +264,8 @@ CORS_ORIGINS=https://your-frontend.vercel.app,http://localhost:5173
 DEFAULT_BALANCE=1000000.00
 TRADING_INTERVAL_MINUTES=10
 HISTORY_DAYS=7
-DATA_SOURCE=alpha_vantage
-ALPHA_VANTAGE_API_KEY=your-alpha-vantage-api-key-here
+DATA_SOURCE=polygon
+POLYGON_API_KEY=your-polygon-api-key-here
 ```
 
 **CORS_ORIGINS Format:**
@@ -341,9 +340,7 @@ python main.py
    - **No code changes needed** to switch between databases - just update `DATABASE_URL` environment variable
 5. **Background Tasks**: The `lifespan` context manager starts the trading scheduler on application startup. This works on Render but not on serverless platforms like Vercel.
 6. **Data Sources**: 
-   - **Alpha Vantage** (default): Recommended for production. Free tier: 5 requests/minute, 500 requests/day. Get API key at https://www.alphavantage.co/support/#api-key
-   - **Yahoo Finance**: Alternative data source, but may have rate limiting issues on cloud servers
-   - Switch between sources via `DATA_SOURCE` environment variable ("yahoo" or "alpha_vantage")
+   - **Polygon.io**: Stocks Starter Plan provides unlimited API calls, 5 years historical data, and WebSocket support. Get API key at https://polygon.io/
 
 ## 🔧 Development Guide
 
