@@ -24,14 +24,58 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,  # Configure via CORS_ORIGINS in .env for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS middleware with Vercel preview deployment support
+def is_allowed_origin(origin: str) -> bool:
+    """Check if origin is allowed, including Vercel preview deployments"""
+    if not origin:
+        return False
+    
+    # Check explicitly configured origins
+    if isinstance(settings.CORS_ORIGINS, list):
+        if origin in settings.CORS_ORIGINS or "*" in settings.CORS_ORIGINS:
+            return True
+    elif isinstance(settings.CORS_ORIGINS, str):
+        if origin == settings.CORS_ORIGINS or settings.CORS_ORIGINS == "*":
+            return True
+    
+    # Allow all Vercel preview deployments (*.vercel.app)
+    if origin.startswith("https://") and ".vercel.app" in origin:
+        return True
+    
+    return False
+
+# Custom CORS middleware that supports Vercel domains
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+import re
+
+class CustomCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        
+        # Handle preflight requests
+        if request.method == "OPTIONS":
+            response = Response()
+            if origin and is_allowed_origin(origin):
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
+        
+        # Handle actual requests
+        response = await call_next(request)
+        
+        if origin and is_allowed_origin(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+
+app.add_middleware(CustomCORSMiddleware)
 
 # Include API routes
 app.include_router(account_router)
