@@ -31,7 +31,7 @@ function Home() {
             onClick={handleStartCompetition}
             className="btn-primary"
           >
-            🚀 Start Competition
+            Try it now
           </button>
           
           <button

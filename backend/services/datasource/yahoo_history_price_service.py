@@ -82,16 +82,85 @@ class YahooService:
     ) -> Dict[str, List[Dict]]:
         """
         Bulk download historical price data for multiple tickers
-        For 5-10 stocks, simple loop is sufficient
-        Adds delay to avoid rate limiting
+        Uses yfinance batch download - one API call for all tickers to avoid rate limiting
         """
+        from core.logging import get_logger
         import time
-        result = {}
-        for i, ticker in enumerate(tickers):
-            if i > 0:  # Don't delay before first request
-                time.sleep(3)  # Wait 3 seconds between requests to avoid rate limiting
-            result[ticker] = self.get_historical_data(ticker, period, start, end)
-        return result
+        
+        logger = get_logger(__name__)
+        result = {ticker: [] for ticker in tickers}
+        
+        try:
+            # Use yfinance batch download - one API call for all tickers
+            if start and end:
+                df = yf.download(tickers, start=start, end=end, progress=False, threads=True, auto_adjust=False)
+            else:
+                df = yf.download(tickers, period=period, progress=False, threads=True, auto_adjust=False)
+            
+            if df.empty:
+                logger.warning("Bulk download returned empty DataFrame, falling back to individual requests")
+                # Fallback to individual requests if bulk download fails
+                for i, ticker in enumerate(tickers):
+                    if i > 0:
+                        time.sleep(3)  # Wait 3 seconds between requests
+                    result[ticker] = self.get_historical_data(ticker, period, start, end)
+                return result
+            
+            # Process bulk download results
+            # yfinance returns multi-level columns: (PriceType, Ticker) for multiple tickers
+            # or single-level columns for single ticker
+            
+            for ticker in tickers:
+                try:
+                    if len(tickers) == 1:
+                        # Single ticker: columns are just 'Open', 'High', etc.
+                        ticker_data = []
+                        for index, row in df.iterrows():
+                            ticker_data.append({
+                                "date": index.date() if isinstance(index, pd.Timestamp) else index,
+                                "open": float(row["Open"]) if pd.notna(row["Open"]) else None,
+                                "high": float(row["High"]) if pd.notna(row["High"]) else None,
+                                "low": float(row["Low"]) if pd.notna(row["Low"]) else None,
+                                "close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                                "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else None,
+                                "adj_close": float(row["Close"]) if pd.notna(row["Close"]) else None,
+                            })
+                        result[ticker] = ticker_data
+                    else:
+                        # Multiple tickers: columns are tuples like ('Open', 'AAPL')
+                        # Check if ticker exists in columns
+                        if ("Close", ticker) in df.columns:
+                            ticker_data = []
+                            for index, row in df.iterrows():
+                                ticker_data.append({
+                                    "date": index.date() if isinstance(index, pd.Timestamp) else index,
+                                    "open": float(row[("Open", ticker)]) if pd.notna(row[("Open", ticker)]) else None,
+                                    "high": float(row[("High", ticker)]) if pd.notna(row[("High", ticker)]) else None,
+                                    "low": float(row[("Low", ticker)]) if pd.notna(row[("Low", ticker)]) else None,
+                                    "close": float(row[("Close", ticker)]) if pd.notna(row[("Close", ticker)]) else None,
+                                    "volume": int(row[("Volume", ticker)]) if pd.notna(row[("Volume", ticker)]) else None,
+                                    "adj_close": float(row[("Adj Close", ticker)]) if ("Adj Close", ticker) in df.columns and pd.notna(row[("Adj Close", ticker)]) else None,
+                                })
+                            result[ticker] = ticker_data
+                        else:
+                            logger.warning(f"Ticker {ticker} not found in bulk download results, falling back to individual request")
+                            # Fallback to individual request for this ticker
+                            result[ticker] = self.get_historical_data(ticker, period, start, end)
+                except Exception as e:
+                    logger.warning(f"Error processing {ticker} from bulk download: {e}, falling back to individual request")
+                    # Fallback to individual request if processing fails
+                    result[ticker] = self.get_historical_data(ticker, period, start, end)
+            
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Bulk download failed: {e}, falling back to individual requests")
+            # Fallback to individual requests if bulk download fails completely
+            for i, ticker in enumerate(tickers):
+                if i > 0:
+                    time.sleep(3)  # Wait 3 seconds between requests
+                result[ticker] = self.get_historical_data(ticker, period, start, end)
+            return result
 
     def get_latest_prices_bulk(self, tickers: List[str]) -> Dict[str, Optional[Dict]]:
         """

@@ -63,7 +63,7 @@ const StockList = ({ competitionStatus, onStocksUpdate }) => {
       } catch (err) {
         console.error("Error auto-refreshing stocks:", err);
       }
-    }, 15000); // 15 seconds
+    }, 300000); // 5 minutes (300000 ms)
 
     // Cleanup interval on unmount or when competition stops
     return () => clearInterval(refreshInterval);
