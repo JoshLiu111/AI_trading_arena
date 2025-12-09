@@ -52,12 +52,19 @@ class YahooService:
                 
             except Exception as e:
                 from core.logging import get_logger
+                import json
+                from requests.exceptions import HTTPError
                 logger = get_logger(__name__)
                 error_str = str(e).lower()
                 is_rate_limit = "429" in error_str or "too many requests" in error_str or "rate limit" in error_str
+                is_json_error = isinstance(e, (json.JSONDecodeError, ValueError))
                 
                 if attempt < retries - 1:
-                    wait_time = (2 ** attempt) * (5 if is_rate_limit else 1)  # Longer wait for rate limits
+                    # Longer wait for rate limits and JSON errors (which often indicate rate limits)
+                    if is_rate_limit or is_json_error:
+                        wait_time = 10 * (2 ** attempt)  # 10s, 20s, 40s
+                    else:
+                        wait_time = 3 * (2 ** attempt)  # 3s, 6s, 12s
                     logger.warning(f"Error fetching historical data for {ticker} (attempt {attempt + 1}/{retries}), retrying in {wait_time}s...")
                     time.sleep(wait_time)
                     continue
@@ -82,7 +89,7 @@ class YahooService:
         result = {}
         for i, ticker in enumerate(tickers):
             if i > 0:  # Don't delay before first request
-                time.sleep(0.5)  # Wait 0.5 seconds between requests to avoid rate limiting
+                time.sleep(3)  # Wait 3 seconds between requests to avoid rate limiting
             result[ticker] = self.get_historical_data(ticker, period, start, end)
         return result
 

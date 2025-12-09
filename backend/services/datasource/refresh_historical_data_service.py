@@ -46,7 +46,7 @@ class RefreshHistoricalDataService:
             # Ensure stock exists in database
             if not get_stock(db, ticker):
                 # Add delay to avoid rate limiting (429 errors)
-                time.sleep(1)  # Wait 1 second between requests
+                time.sleep(3)  # Wait 3 seconds between requests to avoid rate limiting
                 info = yahoo_info_service.get_company_info(ticker)
                 if info:
                     create_stock(db, **info)

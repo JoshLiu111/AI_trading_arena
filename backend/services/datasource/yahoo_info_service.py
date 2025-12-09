@@ -6,6 +6,7 @@ Yahoo Info Service - Company information from Yahoo Finance
 
 import yfinance as yf
 from typing import Optional, Dict
+import json
 
 
 class YahooInfoService:
@@ -14,6 +15,8 @@ class YahooInfoService:
     def get_company_info(self, ticker: str, retries: int = 3) -> Optional[Dict]:
         """Get basic company information with retry logic"""
         import time
+        from requests.exceptions import HTTPError
+        
         for attempt in range(retries):
             try:
                 stock = yf.Ticker(ticker)
@@ -21,7 +24,7 @@ class YahooInfoService:
                 
                 if not info or "shortName" not in info:
                     if attempt < retries - 1:
-                        time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                        time.sleep(3 * (2 ** attempt))  # Exponential backoff: 3s, 6s, 12s
                         continue
                     return None
                 
@@ -33,6 +36,28 @@ class YahooInfoService:
                     "homepage_url": info.get("website") or "",
                     "sic_description": info.get("industry") or "",
                 }
+            except (json.JSONDecodeError, ValueError) as e:
+                # JSONDecodeError usually means 429 rate limit (non-JSON response)
+                from core.logging import get_logger
+                logger = get_logger(__name__)
+                if attempt < retries - 1:
+                    wait_time = 10 * (2 ** attempt)  # 10s, 20s, 40s for JSON errors (likely rate limit)
+                    logger.warning(f"JSON decode error for {ticker} (likely rate limit, attempt {attempt + 1}/{retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                logger.error(f"JSON decode error for {ticker} after {retries} attempts: {e}")
+                return None
+            except HTTPError as e:
+                from core.logging import get_logger
+                logger = get_logger(__name__)
+                is_rate_limit = e.response.status_code == 429
+                if attempt < retries - 1:
+                    wait_time = 10 * (2 ** attempt) if is_rate_limit else 3 * (2 ** attempt)
+                    logger.warning(f"HTTP error for {ticker} (status {e.response.status_code}, attempt {attempt + 1}/{retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                logger.error(f"HTTP error for {ticker} after {retries} attempts: {e}")
+                return None
             except Exception as e:
                 from core.logging import get_logger
                 logger = get_logger(__name__)
@@ -42,7 +67,7 @@ class YahooInfoService:
                 
                 if attempt < retries - 1:
                     # Longer wait for rate limit errors
-                    wait_time = (2 ** attempt) * (5 if is_rate_limit else 1)  # 5s, 10s, 20s for rate limits
+                    wait_time = 10 * (2 ** attempt) if is_rate_limit else 3 * (2 ** attempt)
                     logger.warning(f"Error fetching company info for {ticker} (attempt {attempt + 1}/{retries}): {str(e)[:100]}, retrying in {wait_time}s...")
                     time.sleep(wait_time)
                     continue
