@@ -183,14 +183,14 @@ class PolygonService(BaseDataSource):
             tickers_str = ",".join(tickers)
             endpoint = f"/v2/snapshot/locale/us/markets/stocks/tickers"
             params = {"tickers": tickers_str}
-            logger.debug(f"Fetching snapshot for tickers: {tickers_str}")
+            logger.info(f"Fetching snapshot for {len(tickers)} tickers: {tickers_str}")
             
             data = self._make_request(endpoint, params)
             
             # Parse response
             if "tickers" not in data:
                 logger.warning(f"No tickers data in snapshot response. Response keys: {list(data.keys())}")
-                logger.debug(f"Full snapshot response: {data}")
+                logger.info(f"Snapshot response status: {data.get('status')}, message: {data.get('message', 'N/A')}")
                 return {ticker: None for ticker in tickers}
             
             tickers_data = data["tickers"]
@@ -199,7 +199,7 @@ class PolygonService(BaseDataSource):
                 return {ticker: None for ticker in tickers}
             
             ticker_dict = {item.get("ticker", ""): item for item in tickers_data if item.get("ticker")}
-            logger.debug(f"Snapshot response contains {len(ticker_dict)} tickers: {list(ticker_dict.keys())}")
+            logger.info(f"Snapshot response contains {len(ticker_dict)}/{len(tickers)} tickers: {list(ticker_dict.keys())}")
             
             today = date.today()
             
@@ -214,26 +214,23 @@ class PolygonService(BaseDataSource):
                     last_trade = ticker_data.get("lastTrade") or {}
                     prev_day = ticker_data.get("prevDay") or {}
                     
-                    # Debug logging
-                    logger.debug(f"Ticker {ticker} - lastTrade keys: {list(last_trade.keys()) if last_trade else 'None'}, prevDay keys: {list(prev_day.keys()) if prev_day else 'None'}")
-                    
                     # Use last trade price as close, or prevDay close if not available
                     close_price = None
                     if last_trade and isinstance(last_trade, dict) and last_trade.get("p"):
                         try:
                             close_price = float(last_trade["p"])
-                            logger.debug(f"Using lastTrade price for {ticker}: {close_price}")
+                            logger.info(f"Ticker {ticker}: Using lastTrade price = {close_price}")
                         except (ValueError, TypeError):
                             logger.warning(f"Invalid lastTrade price for {ticker}: {last_trade.get('p')}")
                     elif prev_day and isinstance(prev_day, dict) and prev_day.get("c"):
                         try:
                             close_price = float(prev_day["c"])
-                            logger.debug(f"Using prevDay close for {ticker}: {close_price}")
+                            logger.info(f"Ticker {ticker}: Using prevDay close = {close_price}")
                         except (ValueError, TypeError):
                             logger.warning(f"Invalid prevDay close for {ticker}: {prev_day.get('c')}")
                     
                     if close_price is None:
-                        logger.warning(f"No valid price found for {ticker} in snapshot data. lastTrade: {last_trade}, prevDay: {prev_day}")
+                        logger.warning(f"No valid price found for {ticker}. lastTrade keys: {list(last_trade.keys()) if last_trade else 'None'}, prevDay keys: {list(prev_day.keys()) if prev_day else 'None'}")
                     
                     result[ticker] = {
                         "date": today,

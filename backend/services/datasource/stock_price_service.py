@@ -73,10 +73,13 @@ class StockPriceService:
                 ws_prices = self._get_websocket_service().get_cached_prices_bulk(self.stock_pool)
                 # Use WebSocket data if available, otherwise fallback to REST
                 if any(ws_prices.values()):
+                    logger.info("Using WebSocket cached prices for real-time data")
                     prices = ws_prices
                 else:
+                    logger.info("WebSocket cache empty, fetching from Polygon REST API")
                     prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
             else:
+                logger.info("Fetching real-time prices from Polygon REST API")
                 prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
             
             for ticker in self.stock_pool:
