@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from config import settings
-from services.datasource.yahoo_history_price_service import YahooService
+from services.datasource.data_source_factory import data_source_factory
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -19,11 +19,11 @@ logger = get_logger(__name__)
 class StockPriceService:
     """
     Pure data fetching service for stock prices
-    No database operations - only fetches data from Yahoo Finance
+    No database operations - only fetches data from configured data source
     """
     
     def __init__(self):
-        self.yahoo = YahooService()
+        self.data_source = data_source_factory.get_realtime_service()
         self.stock_pool = settings.STOCK_POOL
     
     def get_realtime_prices(self, db: Session = None) -> List[Dict]:
@@ -95,8 +95,8 @@ class StockPriceService:
                 return float(latest.close)
             return None
         else:
-            # Normal mode: fetch from yfinance
-            prices = self.yahoo.get_latest_prices_bulk(self.stock_pool)
+            # Normal mode: fetch from configured data source
+            prices = self.data_source.get_latest_prices_bulk([ticker])
             price_data = prices.get(ticker)
             return price_data.get("close") if price_data else None
     
@@ -114,8 +114,8 @@ class StockPriceService:
                 latest = get_latest_price_data(db, ticker)
                 result[ticker] = float(latest.close) if latest and latest.close else None
         else:
-            # Normal mode: fetch from yfinance (already bulk)
-            prices = self.yahoo.get_latest_prices_bulk(tickers)
+            # Normal mode: fetch from configured data source (already bulk)
+            prices = self.data_source.get_latest_prices_bulk(tickers)
             for ticker in tickers:
                 price_data = prices.get(ticker)
                 result[ticker] = price_data.get("close") if price_data else None

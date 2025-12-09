@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     
     # API Keys
     OPENAI_API_KEY: str = ""
+    ALPHA_VANTAGE_API_KEY: str = ""
+    
+    # Data Source Configuration
+    DATA_SOURCE: str = "alpha_vantage"  # "yahoo" or "alpha_vantage"
     
     # Competition Settings
     DEFAULT_BALANCE: float = 1000000.00

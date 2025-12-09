@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/stocks", tags=["Stocks"])
 def _create_missing_stocks_background(missing_tickers: List[str]):
     """Background task to create missing stocks without blocking the request"""
     from models.crud.stock_crud import get_stocks_by_tickers, create_stock
-    from services.datasource.yahoo_info_service import yahoo_info_service
+    from services.datasource.data_source_factory import data_source_factory
     
     db = SessionLocal()
     try:
@@ -31,11 +31,12 @@ def _create_missing_stocks_background(missing_tickers: List[str]):
         
         if still_missing:
             import time
+            info_service = data_source_factory.get_info_service()
             for i, ticker in enumerate(still_missing):
                 if i > 0:  # Don't delay before first request
                     time.sleep(3)  # Wait 3 seconds between requests to avoid rate limiting
                 try:
-                    info = yahoo_info_service.get_company_info(ticker)
+                    info = info_service.get_company_info(ticker)
                     if info:
                         create_stock(db, **info)
                 except Exception:
@@ -49,20 +50,21 @@ def _create_missing_stocks_background(missing_tickers: List[str]):
 def _update_stock_info_background(tickers: List[str]):
     """Background task to update stock company info for existing stocks that lack it"""
     from models.crud.stock_crud import get_stocks_by_tickers
-    from services.datasource.yahoo_info_service import yahoo_info_service
+    from services.datasource.data_source_factory import data_source_factory
     
     db = SessionLocal()
     try:
         stocks = get_stocks_by_tickers(db, tickers)
         
         import time
+        info_service = data_source_factory.get_info_service()
         for i, (ticker, stock) in enumerate(stocks.items()):
             # Check if stock needs company info
             if not stock.sector or not stock.sic_description or not stock.homepage_url:
                 if i > 0:  # Don't delay before first request
                     time.sleep(3)  # Wait 3 seconds between requests to avoid rate limiting
                 try:
-                    info = yahoo_info_service.get_company_info(ticker)
+                    info = info_service.get_company_info(ticker)
                     if info:
                         # Update only missing fields
                         if not stock.sector and info.get("sector"):

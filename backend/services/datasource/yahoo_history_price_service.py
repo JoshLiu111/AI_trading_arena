@@ -10,8 +10,10 @@ import pandas as pd
 from typing import List, Dict, Optional
 from datetime import date, timedelta
 
+from services.datasource.base_data_source import BaseDataSource
 
-class YahooService:
+
+class YahooService(BaseDataSource):
     """Unified Yahoo Finance service"""
 
     def get_historical_data(
@@ -299,4 +301,12 @@ class YahooService:
             logger = get_logger(__name__)
             logger.exception("Error fetching latest prices")
             return {ticker: None for ticker in tickers}
+    
+    def get_company_info(self, ticker: str, retries: int = 3) -> Optional[Dict]:
+        """
+        Get company info - not implemented in YahooService
+        Use YahooInfoService for company info
+        """
+        from services.datasource.yahoo_info_service import yahoo_info_service
+        return yahoo_info_service.get_company_info(ticker, retries)
 

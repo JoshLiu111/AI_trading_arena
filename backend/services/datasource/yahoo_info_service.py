@@ -5,11 +5,13 @@ Yahoo Info Service - Company information from Yahoo Finance
 """
 
 import yfinance as yf
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import json
 
+from services.datasource.base_data_source import BaseDataSource
 
-class YahooInfoService:
+
+class YahooInfoService(BaseDataSource):
     """Service for fetching company information from Yahoo Finance"""
 
     def get_company_info(self, ticker: str, retries: int = 3) -> Optional[Dict]:
@@ -75,6 +77,46 @@ class YahooInfoService:
                 return None
         
         return None
+    
+    def get_historical_data(
+        self, 
+        ticker: str, 
+        period: str = "1y",
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        retries: int = 3
+    ) -> List[Dict]:
+        """
+        Get historical data - not implemented in YahooInfoService
+        Use YahooService for historical data
+        """
+        from services.datasource.yahoo_history_price_service import YahooService
+        yahoo_service = YahooService()
+        return yahoo_service.get_historical_data(ticker, period, start, end, retries)
+    
+    def download_bulk(
+        self, 
+        tickers: List[str], 
+        period: str = "1y",
+        start: Optional[str] = None,
+        end: Optional[str] = None
+    ) -> Dict[str, List[Dict]]:
+        """
+        Bulk download - not implemented in YahooInfoService
+        Use YahooService for bulk download
+        """
+        from services.datasource.yahoo_history_price_service import YahooService
+        yahoo_service = YahooService()
+        return yahoo_service.download_bulk(tickers, period, start, end)
+    
+    def get_latest_prices_bulk(self, tickers: List[str]) -> Dict[str, Optional[Dict]]:
+        """
+        Get latest prices - not implemented in YahooInfoService
+        Use YahooService for latest prices
+        """
+        from services.datasource.yahoo_history_price_service import YahooService
+        yahoo_service = YahooService()
+        return yahoo_service.get_latest_prices_bulk(tickers)
 
 
 # Singleton instance

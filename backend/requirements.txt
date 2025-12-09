@@ -11,8 +11,9 @@ gunicorn==21.2.0  # Production WSGI server
 sqlalchemy>=2.0.36  # Updated for Python 3.13 compatibility
 psycopg[binary]>=3.2.0  # psycopg3 - Updated for Python 3.13 compatibility
 
-# HTTP client (for AI API)
+# HTTP client (for AI API and data sources)
 httpx==0.26.0
+requests>=2.31.0  # For Alpha Vantage API
 
 # Stock data
 yfinance==0.2.36
