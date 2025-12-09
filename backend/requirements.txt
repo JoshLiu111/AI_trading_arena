@@ -1,14 +1,14 @@
 # Stock Trading Arena - Dependencies
 
 # FastAPI
-fastapi>=0.115.0  # Updated for Python 3.13 compatibility
-uvicorn[standard]>=0.32.0  # Updated for Python 3.13 compatibility
-pydantic>=2.10.0  # Updated for Python 3.13 compatibility (uses pre-built pydantic-core)
-pydantic-settings>=2.6.0  # Updated for Python 3.13 compatibility
+fastapi>=0.115.0  
+uvicorn[standard]>=0.32.0  
+pydantic>=2.10.0  
+pydantic-settings>=2.6.0  
 gunicorn==21.2.0  # Production WSGI server
 
 # Database
-sqlalchemy==2.0.25
+sqlalchemy>=2.0.36  # Updated for Python 3.13 compatibility
 psycopg2-binary==2.9.9  # PostgreSQL driver (optional, only needed for PostgreSQL)
 
 # HTTP client (for AI API)
@@ -16,7 +16,7 @@ httpx==0.26.0
 
 # Stock data
 yfinance==0.2.36
-pandas>=2.2.0  # Updated for Python 3.13 compatibility
+pandas>=2.2.0  
 
 # Utilities
 python-dotenv==1.0.0
