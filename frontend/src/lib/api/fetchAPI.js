@@ -9,6 +9,12 @@ const API_VERSION = "/api/v1";
 
 export async function fetchAPI(endpoint, options = {}) {
   const url = `${API_BASE_URL}${API_VERSION}${endpoint}`;
+  
+  // Debug: Log API URL in development
+  if (import.meta.env.DEV) {
+    console.log("API Request URL:", url);
+    console.log("API Base URL:", API_BASE_URL);
+  }
   const defaultOptions = {
     headers: {
       "Content-Type": "application/json",
