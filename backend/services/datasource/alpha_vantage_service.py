@@ -56,10 +56,17 @@ class AlphaVantageService(BaseDataSource):
             
             # Check for API errors
             if "Error Message" in data:
-                raise ValueError(f"Alpha Vantage API error: {data['Error Message']}")
+                error_msg = data['Error Message']
+                logger.error(f"Alpha Vantage API error: {error_msg}")
+                raise ValueError(f"Alpha Vantage API error: {error_msg}")
             if "Note" in data:
                 # Rate limit message
-                raise ValueError(f"Alpha Vantage rate limit: {data['Note']}")
+                note = data['Note']
+                logger.warning(f"Alpha Vantage rate limit note: {note}")
+                raise ValueError(f"Alpha Vantage rate limit: {note}")
+            
+            # Log response keys for debugging
+            logger.debug(f"Alpha Vantage API response keys: {list(data.keys())}")
             
             return data
         except HTTPError as e:
@@ -103,12 +110,22 @@ class AlphaVantageService(BaseDataSource):
                     end = end_date.isoformat()
                 
                 # Call Alpha Vantage API
-                data = self._make_request("TIME_SERIES_DAILY_ADJUSTED", ticker, outputsize="full")
+                # Use "compact" for last 100 data points (faster) or "full" for all data
+                # For 7 days, "compact" is sufficient
+                outputsize = "compact" if not start or (start and end and (date.fromisoformat(end) - date.fromisoformat(start)).days < 100) else "full"
+                logger.debug(f"Fetching historical data for {ticker} with outputsize={outputsize}")
+                data = self._make_request("TIME_SERIES_DAILY_ADJUSTED", ticker, outputsize=outputsize)
                 
                 # Parse response
                 time_series_key = "Time Series (Daily)"
                 if time_series_key not in data:
-                    logger.warning(f"No time series data found for {ticker}")
+                    # Log all keys to help debug
+                    logger.warning(f"No time series data found for {ticker}. Response keys: {list(data.keys())}")
+                    # Check for other possible error indicators
+                    if "Information" in data:
+                        logger.warning(f"Alpha Vantage information message: {data['Information']}")
+                    if "Error Message" in data:
+                        logger.error(f"Alpha Vantage error: {data['Error Message']}")
                     return []
                 
                 time_series = data[time_series_key]
@@ -172,8 +189,12 @@ class AlphaVantageService(BaseDataSource):
         with rate limiting (12 seconds between requests)
         """
         result = {}
-        for ticker in tickers:
+        total = len(tickers)
+        for i, ticker in enumerate(tickers, 1):
+            logger.info(f"Downloading {ticker} ({i}/{total})...")
             result[ticker] = self.get_historical_data(ticker, period, start, end)
+            if not result[ticker]:
+                logger.warning(f"No data received for {ticker}")
         return result
     
     def get_latest_prices_bulk(self, tickers: List[str]) -> Dict[str, Optional[Dict]]:
