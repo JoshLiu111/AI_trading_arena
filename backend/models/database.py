@@ -4,9 +4,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from config import settings
 
+# Convert postgresql:// to postgresql+psycopg:// for psycopg3 support
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://") and not database_url.startswith("postgresql+psycopg://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
 engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+    database_url,
+    connect_args={"check_same_thread": False} if "sqlite" in database_url else {}
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
