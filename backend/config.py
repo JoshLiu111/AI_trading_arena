@@ -2,7 +2,7 @@
 
 from pydantic_settings import BaseSettings
 from typing import List, Union
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 import json
 
 
@@ -14,9 +14,37 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     POLYGON_API_KEY: str = ""
     
+    # Alpaca Markets API Keys
+    # Support both standard and alternative field names
+    ALPACA_API_KEY: str = ""
+    ALPACA_API_SECRET: str = ""
+    ALPACA_BASE_URL: str = "https://paper-api.alpaca.markets"  # Paper trading by default
+    ALPACA_DATA_FEED: str = "iex"  # 'iex' (free) or 'sip' (premium)
+    
+    # Alternative field names (for compatibility with different .env formats)
+    ALPACA_SECRET_KEY: str = ""  # Alternative to ALPACA_API_SECRET
+    ALPACA_BROKER_URL: str = ""  # Alternative to ALPACA_BASE_URL
+    ALPACA_DATA_URL: str = ""  # Alternative to ALPACA_DATA_FEED (not used, but allow it)
+    
+    @model_validator(mode='after')
+    def map_alternative_field_names(self):
+        """Map alternative field names to standard names for compatibility"""
+        # Map ALPACA_SECRET_KEY to ALPACA_API_SECRET if not set
+        if not self.ALPACA_API_SECRET and self.ALPACA_SECRET_KEY:
+            self.ALPACA_API_SECRET = self.ALPACA_SECRET_KEY
+        
+        # Map ALPACA_BROKER_URL to ALPACA_BASE_URL
+        # Priority: ALPACA_BROKER_URL > ALPACA_BASE_URL > default
+        if self.ALPACA_BROKER_URL:
+            self.ALPACA_BASE_URL = self.ALPACA_BROKER_URL
+        elif not self.ALPACA_BASE_URL:
+            self.ALPACA_BASE_URL = "https://paper-api.alpaca.markets"
+        
+        return self
+    
     # Data Source Configuration
-    # Only Polygon.io is supported
-    DATA_SOURCE: str = "polygon"  # Polygon.io
+    # Options: "polygon" or "alpaca"
+    DATA_SOURCE: str = "alpaca"  # Default to Alpaca for real-time data
     
     # Competition Settings
     DEFAULT_BALANCE: float = 1000000.00
@@ -64,6 +92,8 @@ class Settings(BaseSettings):
         case_sensitive = False
         # Allow reading from environment variables
         env_file_encoding = 'utf-8'
+        # Allow extra fields in .env (to support alternative field names)
+        extra = 'allow'
 
 
 settings = Settings()

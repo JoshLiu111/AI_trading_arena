@@ -94,32 +94,63 @@ async def lifespan(app):
     
     # Debug: Log configuration status
     logger.info(f"DATA_SOURCE: {settings.DATA_SOURCE}")
-    api_key = settings.POLYGON_API_KEY
-    if api_key and api_key.strip():
-        logger.info(f"POLYGON_API_KEY: Configured (length: {len(api_key)})")
+    data_source = settings.DATA_SOURCE.lower()
+    
+    if data_source == "alpaca":
+        api_key = settings.ALPACA_API_KEY
+        api_secret = settings.ALPACA_API_SECRET
+        if api_key and api_key.strip() and api_secret and api_secret.strip():
+            logger.info(f"ALPACA_API_KEY: Configured (length: {len(api_key)})")
+            logger.info(f"ALPACA_API_SECRET: Configured (length: {len(api_secret)})")
+        else:
+            logger.error("ALPACA_API_KEY or ALPACA_API_SECRET: NOT CONFIGURED!")
+            logger.error("Please set ALPACA_API_KEY and ALPACA_API_SECRET environment variables in Render dashboard")
     else:
-        logger.error("POLYGON_API_KEY: NOT CONFIGURED!")
-        logger.error("Please set POLYGON_API_KEY environment variable in Render dashboard")
+        # Default to Polygon
+        api_key = settings.POLYGON_API_KEY
+        if api_key and api_key.strip():
+            logger.info(f"POLYGON_API_KEY: Configured (length: {len(api_key)})")
+        else:
+            logger.error("POLYGON_API_KEY: NOT CONFIGURED!")
+            logger.error("Please set POLYGON_API_KEY environment variable in Render dashboard")
     
     # Start trading scheduler
     await scheduler.start()
     
-    # Start Polygon WebSocket
+    # Start WebSocket service based on configured data source (optional - will fallback to REST API if fails)
     try:
-        from services.datasource.polygon_websocket_service import polygon_websocket_service
-        await polygon_websocket_service.start(settings.STOCK_POOL)
-        logger.info("Polygon WebSocket service started")
+        if data_source == "alpaca":
+            from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
+            alpaca_ws = get_alpaca_websocket_service()
+            if alpaca_ws:
+                await alpaca_ws.start(settings.STOCK_POOL)
+                logger.info("Alpaca WebSocket service started")
+            else:
+                logger.warning("Alpaca WebSocket service not available")
+        else:
+            # Default to Polygon
+            from services.datasource.polygon_websocket_service import polygon_websocket_service
+            await polygon_websocket_service.start(settings.STOCK_POOL)
+            logger.info("Polygon WebSocket service started")
     except Exception as e:
-        logger.warning(f"Failed to start Polygon WebSocket: {e}")
+        logger.warning(f"Failed to start WebSocket service ({data_source}): {e}")
+        logger.info("Will use REST API for real-time prices (WebSocket unavailable)")
     
     yield
     
     # Stop trading scheduler on shutdown
     await scheduler.stop()
     
-    # Stop Polygon WebSocket on shutdown
+    # Stop WebSocket service on shutdown
     try:
-        from services.datasource.polygon_websocket_service import polygon_websocket_service
-        await polygon_websocket_service.stop()
+        if data_source == "alpaca":
+            from services.datasource.alpaca_websocket_service import get_alpaca_websocket_service
+            alpaca_ws = get_alpaca_websocket_service()
+            if alpaca_ws:
+                await alpaca_ws.stop()
+        else:
+            # Default to Polygon
+            from services.datasource.polygon_websocket_service import polygon_websocket_service
+            await polygon_websocket_service.stop()
     except Exception as e:
-        logger.warning(f"Failed to stop Polygon WebSocket: {e}")
+        logger.warning(f"Failed to stop WebSocket service ({data_source}): {e}")

@@ -120,14 +120,13 @@ class PolygonWebSocketService:
         logger.info(f"Subscribed to {len(tickers)} tickers via WebSocket: {tickers}")
         logger.info(f"Subscription message: {json.dumps(subscribe_msg)}")
         
-        # Wait for subscription confirmation (optional, but helpful for debugging)
-        try:
-            # Give it a moment to receive subscription confirmation
-            await asyncio.sleep(0.5)
-            # Try to peek at next message if available (non-blocking)
-            # This is just for logging, actual listening happens in _listen()
-        except Exception as e:
-            logger.debug(f"Error checking subscription confirmation: {e}")
+        # Wait a moment to check for subscription errors
+        await asyncio.sleep(1.0)
+        
+        # If we received authorization errors, stop the service
+        if not self.running:
+            logger.warning("WebSocket service stopped due to subscription errors")
+            return
     
     async def _listen(self):
         """Listen for WebSocket messages with auto-reconnect"""
@@ -169,8 +168,11 @@ class PolygonWebSocketService:
             except websockets.exceptions.ConnectionClosed:
                 logger.warning("WebSocket connection closed")
                 if self.running:
-                    # Attempt to reconnect
-                    await self._reconnect()
+                    # Check if we should stop (due to authorization or connection limit errors)
+                    # These errors are handled in _handle_event, which sets self.running = False
+                    if self.running:
+                        # Attempt to reconnect
+                        await self._reconnect()
             except Exception as e:
                 logger.exception(f"WebSocket listen error: {e}")
                 if self.running:
@@ -186,6 +188,10 @@ class PolygonWebSocketService:
             logger.error(f"Max reconnect attempts ({self.max_reconnect_attempts}) reached. Stopping WebSocket service.")
             logger.warning("WebSocket service disabled. Falling back to REST API for real-time prices.")
             self.running = False
+            return
+        
+        # Don't reconnect if we've been explicitly stopped (e.g., due to authorization errors)
+        if not self.running:
             return
         
         self.reconnect_attempts += 1
@@ -255,6 +261,16 @@ class PolygonWebSocketService:
                 logger.info(f"WebSocket operation successful: {message}")
             elif status == "subscribed":
                 logger.info(f"WebSocket subscription confirmed: {message}")
+            elif status == "error" and "not authorized" in message.lower():
+                logger.error(f"WebSocket subscription error: {message} - Starter Plan may not support this subscription type")
+                # Stop trying to reconnect if we get authorization errors
+                if "not authorized" in message.lower():
+                    logger.warning("Stopping WebSocket service due to authorization errors. Falling back to REST API.")
+                    self.running = False
+            elif status == "max_connections":
+                logger.error(f"WebSocket max connections reached: {message}")
+                logger.warning("Stopping WebSocket service due to connection limit. Falling back to REST API.")
+                self.running = False
             else:
                 logger.info(f"WebSocket status: {status} - {message}")
     
