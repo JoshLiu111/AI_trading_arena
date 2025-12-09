@@ -16,8 +16,7 @@ httpx==0.26.0
 requests>=2.31.0  # For Alpha Vantage API
 
 # Stock data
-yfinance==0.2.36
-pandas>=2.2.0  
+pandas>=2.2.0  # For data processing (no longer using yfinance)  
 
 # Utilities
 python-dotenv==1.0.0

@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     ALPHA_VANTAGE_API_KEY: str = ""
     
     # Data Source Configuration
-    DATA_SOURCE: str = "alpha_vantage"  # "yahoo" or "alpha_vantage"
+    # Note: Only Alpha Vantage is supported now (yfinance has been removed)
+    DATA_SOURCE: str = "alpha_vantage"  # Only "alpha_vantage" is supported
     
     # Competition Settings
     DEFAULT_BALANCE: float = 1000000.00

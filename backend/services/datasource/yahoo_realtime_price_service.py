@@ -58,8 +58,8 @@ class StockPriceService:
                         "updated_at": datetime.now()
                     })
         else:
-            # Normal mode: fetch from yfinance
-            prices = self.yahoo.get_latest_prices_bulk(self.stock_pool)
+            # Normal mode: fetch from configured data source
+            prices = self.data_source.get_latest_prices_bulk(self.stock_pool)
             
             for ticker in self.stock_pool:
                 price_data = prices.get(ticker)
