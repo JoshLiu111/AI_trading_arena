@@ -132,11 +132,15 @@ def get_realtime_prices(
         ticker = price_data["ticker"]
         stock = stocks_dict.get(ticker)
         
-        # Get previous_close from bulk-fetched history
+        # Get previous_close from database history (previous trading day's close price)
+        # Simplified logic: always use the second most recent record as previous_close
+        # If only one record exists, use it as previous_close
         history = history_dict.get(ticker, [])
+        current_price = price_data.get("price")
         previous_close = None
+        
         if len(history) >= 2:
-            # Second most recent record is previous trading day
+            # Use the second most recent record as previous_close (previous trading day)
             previous_close = float(history[1].close) if history[1].close else None
         elif len(history) == 1:
             # If only one record, use it as previous_close

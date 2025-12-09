@@ -47,7 +47,7 @@ const StockList = ({ competitionStatus, onStocksUpdate }) => {
     fetchStocks();
   }, []);
 
-  // Auto-refresh stock prices every 15 seconds when competition is running
+  // Auto-refresh stock prices every 5 minutes when competition is running
   useEffect(() => {
     if (!competitionStatus?.is_running) {
       return; // Don't refresh if competition is not running

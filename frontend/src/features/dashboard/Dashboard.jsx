@@ -4,7 +4,7 @@ import { CompetitionFlow } from "@/features/competition";
 import { AccountCard } from "@/features/account";
 import { StockList } from "@/features/stock";
 import { StrategyReport } from "@/features/strategyReport";
-import { getAllAccounts } from "@/lib/api";
+import { getAllAccounts, getCompetitionStatus } from "@/lib/api";
 
 function Dashboard() {
   const [accounts, setAccounts] = useState([]);
@@ -12,23 +12,35 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch accounts on mount
+  // Fetch accounts and competition status on mount
   useEffect(() => {
-    const fetchAccounts = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const accountsData = await getAllAccounts();
+        
+        // Fetch both accounts and competition status in parallel
+        const [accountsData, statusData] = await Promise.all([
+          getAllAccounts(),
+          getCompetitionStatus().catch(err => {
+            console.error("Error fetching competition status:", err);
+            return null; // Don't fail if status fetch fails
+          })
+        ]);
+        
         setAccounts(accountsData);
+        if (statusData) {
+          setCompetitionStatus(statusData);
+        }
       } catch (err) {
         setError(err.message);
-        console.error("Error fetching accounts:", err);
+        console.error("Error fetching data:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAccounts();
+    fetchData();
   }, []);
 
   // Auto-refresh accounts every 15 seconds when competition is running

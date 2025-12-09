@@ -27,19 +27,29 @@ export function useCompetitionStatus({ initialCompetitionStatus, onStatusChange 
       }
     };
 
-    // Initial fetch only if status is not provided
-    if (!competitionStatus) {
-      fetchStatus();
-    }
+    // Always fetch status on mount to ensure we have the latest state
+    // This prevents stale state when navigating back to the page
+    fetchStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run on mount - onStatusChange is intentionally excluded to prevent loops
 
-  // Update internal status when prop changes
+  // Update internal status when prop changes (but only if it's different to avoid unnecessary updates)
   useEffect(() => {
     if (initialCompetitionStatus) {
-      setCompetitionStatus(initialCompetitionStatus);
+      // Only update if the status actually changed to prevent loops
+      const currentIsRunning = competitionStatus?.is_running || false;
+      const currentIsPaused = competitionStatus?.is_paused || false;
+      const newIsRunning = initialCompetitionStatus?.is_running || false;
+      const newIsPaused = initialCompetitionStatus?.is_paused || false;
+      
+      if (currentIsRunning !== newIsRunning || currentIsPaused !== newIsPaused) {
+        setCompetitionStatus(initialCompetitionStatus);
+      }
+    } else if (competitionStatus && !initialCompetitionStatus) {
+      // If prop becomes null but we have state, keep the state (don't reset to null)
+      // This prevents losing state when parent component re-renders
     }
-  }, [initialCompetitionStatus]);
+  }, [initialCompetitionStatus, competitionStatus]);
 
   /**
    * Update competition status

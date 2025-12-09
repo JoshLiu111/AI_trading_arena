@@ -67,19 +67,20 @@ class StockPriceService:
                     })
         else:
             # Normal mode: fetch from configured data source
-            # Try WebSocket first if using Polygon, fallback to REST API
-            if settings.DATA_SOURCE == "polygon" and self._get_websocket_service():
+            # Try WebSocket first if using Polygon and WebSocket is running, fallback to REST API
+            ws_service = self._get_websocket_service()
+            if settings.DATA_SOURCE == "polygon" and ws_service and ws_service.running:
                 # Try to get from WebSocket cache first
-                ws_prices = self._get_websocket_service().get_cached_prices_bulk(self.stock_pool)
+                ws_prices = ws_service.get_cached_prices_bulk(self.stock_pool)
                 # Use WebSocket data if available, otherwise fallback to REST
                 if any(ws_prices.values()):
-                    logger.info("Using WebSocket cached prices for real-time data")
+                    logger.debug("Using WebSocket cached prices for real-time data")
                     prices = ws_prices
                 else:
-                    logger.info("WebSocket cache empty, fetching from Polygon REST API")
+                    logger.debug("WebSocket cache empty, fetching from Polygon REST API")
                     prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
             else:
-                logger.info("Fetching real-time prices from Polygon REST API")
+                logger.debug("Fetching real-time prices from Polygon REST API")
                 prices = self._get_data_source().get_latest_prices_bulk(self.stock_pool)
             
             for ticker in self.stock_pool:
@@ -107,6 +108,7 @@ class StockPriceService:
         """
         Get current price for a single ticker (pure data fetch)
         If USE_HISTORICAL_AS_REALTIME is True, uses latest historical price from database
+        Otherwise, prioritizes WebSocket real-time data, falls back to REST API
         """
         # Test mode: use historical data as real-time
         if settings.USE_HISTORICAL_AS_REALTIME and db:
@@ -117,9 +119,23 @@ class StockPriceService:
             return None
         else:
             # Normal mode: fetch from configured data source
-            prices = self._get_data_source().get_latest_prices_bulk([ticker])
-            price_data = prices.get(ticker)
-            return price_data.get("close") if price_data else None
+            # Try WebSocket first if using Polygon and WebSocket is running, fallback to REST API
+            ws_service = self._get_websocket_service()
+            if settings.DATA_SOURCE == "polygon" and ws_service and ws_service.running:
+                ws_price = ws_service.get_cached_price(ticker)
+                if ws_price and ws_price.get("close"):
+                    logger.debug(f"Using WebSocket cached price for {ticker}")
+                    return float(ws_price.get("close"))
+                else:
+                    logger.debug(f"WebSocket cache empty for {ticker}, fetching from REST API")
+                    prices = self._get_data_source().get_latest_prices_bulk([ticker])
+                    price_data = prices.get(ticker)
+                    return price_data.get("close") if price_data else None
+            else:
+                logger.debug(f"Fetching real-time price for {ticker} from Polygon REST API")
+                prices = self._get_data_source().get_latest_prices_bulk([ticker])
+                price_data = prices.get(ticker)
+                return price_data.get("close") if price_data else None
     
     def get_current_prices_bulk(self, tickers: List[str], db: Session = None) -> Dict[str, Optional[float]]:
         """
@@ -136,14 +152,18 @@ class StockPriceService:
                 result[ticker] = float(latest.close) if latest and latest.close else None
         else:
             # Normal mode: fetch from configured data source (already bulk)
-            # Try WebSocket first if using Polygon, fallback to REST API
-            if settings.DATA_SOURCE == "polygon" and self._get_websocket_service():
-                ws_prices = self._get_websocket_service().get_cached_prices_bulk(tickers)
+            # Try WebSocket first if using Polygon and WebSocket is running, fallback to REST API
+            ws_service = self._get_websocket_service()
+            if settings.DATA_SOURCE == "polygon" and ws_service and ws_service.running:
+                ws_prices = ws_service.get_cached_prices_bulk(tickers)
                 if any(ws_prices.values()):
+                    logger.debug("Using WebSocket cached prices for bulk real-time data")
                     prices = ws_prices
                 else:
+                    logger.debug("WebSocket cache empty, fetching from Polygon REST API for bulk prices")
                     prices = self._get_data_source().get_latest_prices_bulk(tickers)
             else:
+                logger.debug("Fetching bulk real-time prices from Polygon REST API")
                 prices = self._get_data_source().get_latest_prices_bulk(tickers)
             for ticker in tickers:
                 price_data = prices.get(ticker)

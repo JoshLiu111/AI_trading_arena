@@ -232,6 +232,11 @@ class PolygonService(BaseDataSource):
                     if close_price is None:
                         logger.warning(f"No valid price found for {ticker}. lastTrade keys: {list(last_trade.keys()) if last_trade else 'None'}, prevDay keys: {list(prev_day.keys()) if prev_day else 'None'}")
                     
+                    # Store prevDay.close as previous_close for price change calculation
+                    # If current_price is prevDay.close, we need the day before that for previous_close
+                    # For now, we'll use prevDay.close as both current and previous (will be fixed when we have real-time data)
+                    prev_day_close = float(prev_day.get("c", 0)) if prev_day and prev_day.get("c") else None
+                    
                     result[ticker] = {
                         "date": today,
                         "open": float(prev_day.get("o", 0)) if prev_day.get("o") else None,
@@ -240,6 +245,7 @@ class PolygonService(BaseDataSource):
                         "close": close_price,
                         "volume": int(prev_day.get("v", 0)) if prev_day.get("v") else None,
                         "adj_close": close_price,  # Use close as adj_close
+                        "previous_close": prev_day_close,  # Store prevDay.close for price change calculation
                     }
                 except Exception as e:
                     logger.warning(f"Error processing {ticker} from snapshot: {e}")

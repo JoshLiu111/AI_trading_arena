@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     
     # Competition Settings
     DEFAULT_BALANCE: float = 1000000.00
-    TRADING_INTERVAL_MINUTES: int = 10  # Auto-trading interval (10 minutes)
+    TRADING_INTERVAL_MINUTES: int = 1  # Auto-trading interval (1 minute)
     HISTORY_DAYS: int = 7
     
     # Testing Mode (for non-market hours)
