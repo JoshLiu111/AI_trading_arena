@@ -30,6 +30,9 @@ class PolygonWebSocketService:
         self.running = False
         self.task = None
         self.subscribed_tickers: Set[str] = set()
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 10
+        self.reconnect_delay = 5  # Initial delay in seconds
     
     async def connect(self):
         """Connect to Polygon WebSocket"""
@@ -117,29 +120,81 @@ class PolygonWebSocketService:
         logger.info(f"Subscribed to {len(tickers)} tickers via WebSocket: {tickers}")
     
     async def _listen(self):
-        """Listen for WebSocket messages"""
-        try:
-            async for message in self.websocket:
-                try:
-                    data = json.loads(message)
-                    
-                    # Handle array of events
-                    if isinstance(data, list):
-                        for event in data:
-                            await self._handle_event(event)
-                    else:
-                        await self._handle_event(data)
+        """Listen for WebSocket messages with auto-reconnect"""
+        while self.running:
+            try:
+                async for message in self.websocket:
+                    try:
+                        data = json.loads(message)
                         
-                except json.JSONDecodeError as e:
-                    logger.warning(f"Failed to parse WebSocket message: {e}")
-                except Exception as e:
-                    logger.exception(f"Error handling WebSocket message: {e}")
-        except websockets.exceptions.ConnectionClosed:
-            logger.warning("WebSocket connection closed")
+                        # Handle array of events
+                        if isinstance(data, list):
+                            for event in data:
+                                await self._handle_event(event)
+                        else:
+                            await self._handle_event(data)
+                        
+                        # Reset reconnect attempts on successful message
+                        self.reconnect_attempts = 0
+                        self.reconnect_delay = 5
+                            
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse WebSocket message: {e}")
+                    except Exception as e:
+                        logger.exception(f"Error handling WebSocket message: {e}")
+            except websockets.exceptions.ConnectionClosed:
+                logger.warning("WebSocket connection closed")
+                if self.running:
+                    # Attempt to reconnect
+                    await self._reconnect()
+            except Exception as e:
+                logger.exception(f"WebSocket listen error: {e}")
+                if self.running:
+                    # Attempt to reconnect
+                    await self._reconnect()
+    
+    async def _reconnect(self):
+        """Attempt to reconnect to WebSocket with exponential backoff"""
+        if not self.running:
+            return
+        
+        if self.reconnect_attempts >= self.max_reconnect_attempts:
+            logger.error(f"Max reconnect attempts ({self.max_reconnect_attempts}) reached. Stopping WebSocket service.")
             self.running = False
+            return
+        
+        self.reconnect_attempts += 1
+        delay = min(self.reconnect_delay * (2 ** (self.reconnect_attempts - 1)), 60)  # Max 60 seconds
+        logger.info(f"Attempting to reconnect WebSocket (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts}) in {delay}s...")
+        
+        await asyncio.sleep(delay)
+        
+        if not self.running:
+            return
+        
+        try:
+            # Close old connection if exists
+            if self.websocket:
+                try:
+                    await self.websocket.close()
+                except Exception:
+                    pass  # Ignore errors when closing old connection
+                self.websocket = None
+            
+            # Reconnect
+            await self.connect()
+            
+            # Resubscribe to tickers
+            if self.subscribed_tickers:
+                await self.subscribe(list(self.subscribed_tickers))
+            
+            logger.info("WebSocket reconnected successfully")
+            self.reconnect_attempts = 0
+            self.reconnect_delay = 5
+            
         except Exception as e:
-            logger.exception(f"WebSocket listen error: {e}")
-            self.running = False
+            logger.error(f"Reconnection attempt {self.reconnect_attempts} failed: {e}")
+            # Will retry in next iteration if self.running is still True
     
     async def _handle_event(self, event: Dict):
         """Handle a single WebSocket event"""
@@ -187,6 +242,8 @@ class PolygonWebSocketService:
     async def stop(self):
         """Stop WebSocket connection"""
         self.running = False
+        
+        # Cancel listening task
         if self.task:
             self.task.cancel()
             try:
@@ -194,9 +251,18 @@ class PolygonWebSocketService:
             except asyncio.CancelledError:
                 pass
         
+        # Close WebSocket connection with error handling
         if self.websocket:
-            await self.websocket.close()
-            logger.info("Polygon WebSocket connection closed")
+            try:
+                # Check if websocket is still open before closing
+                if not self.websocket.closed:
+                    await self.websocket.close()
+                logger.info("Polygon WebSocket connection closed")
+            except Exception as e:
+                # Ignore errors when closing (socket might already be closed)
+                logger.debug(f"Error closing WebSocket (may already be closed): {e}")
+            finally:
+                self.websocket = None
     
     def get_cached_price(self, ticker: str) -> Optional[Dict]:
         """Get cached price for a ticker"""
