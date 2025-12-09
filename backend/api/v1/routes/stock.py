@@ -14,6 +14,9 @@ from models.database import get_db, SessionLocal
 from models.crud.stock_price_crud import get_price_history
 from services.datasource.stock_price_service import stock_price_service
 from config import settings
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/stocks", tags=["Stocks"])
 
