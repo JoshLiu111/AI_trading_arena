@@ -113,7 +113,7 @@ class TradingScheduler:
                 
                 # If no refresh time found today, use first one tomorrow
                 if next_refresh is None:
-                    tomorrow = now_et.date() + asyncio.get_event_loop().time() + 86400  # Add 1 day
+                    tomorrow = now_et.date() + timedelta(days=1)
                     next_refresh = datetime.combine(tomorrow, refresh_times[0])
                     next_refresh = et_tz.localize(next_refresh)
                 
