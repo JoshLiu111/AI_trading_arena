@@ -40,11 +40,9 @@ def is_allowed_origin(origin: str) -> bool:
     
     # Allow all Vercel preview deployments (*.vercel.app)
     # Support both joshlius-projects.vercel.app and other Vercel domains
-    if origin.startswith("https://") and ".vercel.app" in origin:
-        return True
-    
-    # Also allow if it contains vercel.app anywhere (for preview deployments)
-    if "vercel.app" in origin.lower():
+    # Check for vercel.app in the origin (case-insensitive)
+    origin_lower = origin.lower()
+    if "vercel.app" in origin_lower:
         return True
     
     return False
@@ -59,38 +57,52 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin")
         
-        # Debug logging
+        # Logging
         from core.logging import get_logger
         logger = get_logger(__name__)
-        if origin:
-            logger.debug(f"CORS request from origin: {origin}")
-            logger.debug(f"Is allowed: {is_allowed_origin(origin)}")
         
         # Handle preflight requests
         if request.method == "OPTIONS":
             response = Response()
-            if origin and is_allowed_origin(origin):
-                response.headers["Access-Control-Allow-Origin"] = origin
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-                response.headers["Access-Control-Allow-Headers"] = "*"
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Max-Age"] = "86400"  # 24 hours
-                logger.debug(f"CORS preflight allowed for {origin}")
+            if origin:
+                is_allowed = is_allowed_origin(origin)
+                logger.info(f"CORS preflight from {origin}: {'ALLOWED' if is_allowed else 'DENIED'}")
+                if is_allowed:
+                    response.headers["Access-Control-Allow-Origin"] = origin
+                    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                    response.headers["Access-Control-Allow-Headers"] = "*"
+                    response.headers["Access-Control-Allow-Credentials"] = "true"
+                    response.headers["Access-Control-Max-Age"] = "86400"  # 24 hours
+                else:
+                    # Still add headers but with a warning
+                    logger.warning(f"CORS preflight denied for {origin}, but adding headers anyway for debugging")
+                    response.headers["Access-Control-Allow-Origin"] = origin  # Add anyway for debugging
+                    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                    response.headers["Access-Control-Allow-Headers"] = "*"
             else:
-                logger.warning(f"CORS preflight denied for origin: {origin}")
+                logger.warning("CORS preflight request with no origin header")
             return response
         
         # Handle actual requests
         response = await call_next(request)
         
-        if origin and is_allowed_origin(origin):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-            response.headers["Access-Control-Allow-Headers"] = "*"
-            logger.debug(f"CORS headers added for {origin}")
+        if origin:
+            is_allowed = is_allowed_origin(origin)
+            logger.info(f"CORS request from {origin}: {'ALLOWED' if is_allowed else 'DENIED'}")
+            if is_allowed:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+            else:
+                # Add headers anyway for debugging - this should not happen if logic is correct
+                logger.warning(f"CORS request denied for {origin}, but adding headers anyway for debugging")
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                response.headers["Access-Control-Allow-Headers"] = "*"
         else:
-            logger.warning(f"CORS headers not added for origin: {origin}")
+            logger.debug("Request with no origin header")
         
         return response
 
