@@ -16,7 +16,7 @@ httpx==0.26.0
 
 # Stock data
 yfinance==0.2.36
-pandas==2.1.4
+pandas>=2.2.0  # Updated for Python 3.13 compatibility
 
 # Utilities
 python-dotenv==1.0.0
