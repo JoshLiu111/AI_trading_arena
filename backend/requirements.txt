@@ -9,7 +9,7 @@ gunicorn==21.2.0  # Production WSGI server
 
 # Database
 sqlalchemy>=2.0.36  # Updated for Python 3.13 compatibility
-psycopg2-binary==2.9.9  # PostgreSQL driver (optional, only needed for PostgreSQL)
+psycopg2-binary>=2.9.10  # Updated for Python 3.13 compatibility
 
 # HTTP client (for AI API)
 httpx==0.26.0
